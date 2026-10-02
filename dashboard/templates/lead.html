@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="back" href="{{ url_for('b2c' if channel=='B2C' else 'b2b') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Kembali</span></a>
+<h1>{{ lead.company_name if channel=="B2B" and lead.company_name else lead.sender }}</h1>
+<div class="detail-grid">
+  <section class="panel">
+    <h2>Lead Profile</h2>
+    {% if channel=="B2C" %}
+      <dl>
+        <dt>WhatsApp</dt><dd>{{ lead.sender }}</dd>
+        <dt>Class</dt><dd>{{ lead.selected_class or "—" }}</dd>
+        <dt>Registration Intent</dt><dd>{{ "Yes" if lead.registration_intent else "No" }}</dd>
+        <dt>Registration Confirmed</dt><dd>{{ "Yes" if lead.registration_confirmed else "No" }}</dd>
+        <dt>Quantity</dt><dd>{{ lead.registration_quantity or "—" }}</dd>
+        <dt>Payment Claim</dt><dd>{{ "Needs verification" if lead.payment_claimed else "—" }}</dd>
+      </dl>
+    {% else %}
+      <dl>
+        <dt>WhatsApp</dt><dd>{{ lead.sender }}</dd>
+        <dt>Contact</dt><dd>{{ lead.contact_name or "—" }}</dd>
+        <dt>Company</dt><dd>{{ lead.company_name or "—" }}</dd>
+        <dt>Division</dt><dd>{{ lead.representative_division or "—" }}</dd>
+        <dt>Participants</dt><dd>{{ lead.participant_count or "—" }}</dd>
+        <dt>Delivery</dt><dd>{{ lead.preferred_delivery or "—" }}</dd>
+        <dt>Training Goal</dt><dd>{{ lead.training_goal or "—" }}</dd>
+        <dt>Proposal</dt><dd>{{ "Sent" if lead.proposal_sent else "Not sent" }}</dd>
+        <dt>Meeting Request</dt><dd>{{ lead.meeting_request or "—" }}</dd>
+      </dl>
+    {% endif %}
+    <h3>OpenAI API Usage</h3>
+    <div class="api-usage">
+      <dl>
+        <dt>API Calls</dt><dd>{{ api_usage.api_calls }}</dd>
+        <dt>Input Tokens</dt><dd>{{ "{:,}".format(api_usage.input_tokens) }}</dd>
+        <dt>Cached Input</dt><dd>{{ "{:,}".format(api_usage.cached_input_tokens) }}</dd>
+        <dt>Cache Writes</dt><dd>{{ "{:,}".format(api_usage.cache_write_tokens) }}</dd>
+        <dt>Output Tokens</dt><dd>{{ "{:,}".format(api_usage.output_tokens) }}</dd>
+        <dt>Estimated Cost</dt><dd class="api-cost">${{ "%.6f"|format(api_usage.estimated_cost_usd) }}</dd>
+      </dl>
+      {% if api_usage.by_type %}
+      <div class="api-breakdown">
+        {% for row in api_usage.by_type %}
+        <span>{{ row.call_type }}: {{ row.calls }} call{{ "s" if row.calls != 1 else "" }} · ${{ "%.6f"|format(row.estimated_cost_usd) }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% if followup %}
+    <h3>Scheduled Follow-up</h3>
+    <div class="followup">{{ followup.kind }}<br><span class="tiny">Due: {{ followup.due_at|format_wib }}</span></div>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <h2>Conversation</h2>
+    <div class="chat">
+      {% for m in messages %}
+      <div class="bubble {{ m.role }}">
+        <div class="bubble-label">{{ "Customer" if m.role=="user" else ("Human Admin" if m.role=="human_admin" else "AI Admin") }}</div>
+        <div>{{ m.content }}</div>
+        <span>{{ m.created_at|format_wib }}</span>
+      </div>
+      {% else %}
+      <div class="empty">Belum ada conversation history.</div>
+      {% endfor %}
+    </div>
+
+    {% if open_notifications %}
+    <div class="human-reply-box">
+      <div class="human-reply-head">
+        <strong><i class="fa-solid fa-user-shield" aria-hidden="true"></i><span>Human Handling</span></strong>
+        <span>Reply aktif karena ada notifikasi yang membutuhkan tindakan admin.</span>
+      </div>
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('human_reply', sender=lead.sender) }}">
+        <label for="notification_id">Notifikasi</label>
+        <select id="notification_id" name="notification_id" required>
+          {% for n in open_notifications %}
+          <option value="{{ n.id }}">{{ n.title }} · {{ n.status.replace('_',' ').title() }}</option>
+          {% endfor %}
+        </select>
+        <textarea name="message" rows="4" maxlength="4096" placeholder="Tulis balasan human admin (opsional jika mengirim file)..."></textarea>
+        <label for="human_file"><i class="fa-solid fa-paperclip" aria-hidden="true"></i> Lampiran (opsional)</label>
+        <input id="human_file" class="human-file" type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+        <span class="tiny">Format: PDF, JPG, JPEG, PNG. Maksimum default 20 MB. Teks akan menjadi caption jika file dilampirkan (maks. 1024 karakter).</span>
+        <div class="reply-actions">
+          <span class="tiny">Pesan akan langsung dikirim ke WhatsApp customer dan notifikasi dipindahkan ke Resolved.</span>
+          <button class="button human-send" type="submit"><i class="fa-brands fa-whatsapp" aria-hidden="true"></i><span>Kirim ke WhatsApp</span></button>
+        </div>
+      </form>
+    </div>
+    {% else %}
+    <div class="human-reply-locked"><i class="fa-solid fa-lock" aria-hidden="true"></i><span>Human reply hanya tersedia ketika ada notifikasi aktif untuk lead ini.</span></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ "AI Intensive Bootcamp" if channel=="B2C" else "AI Corporate Training" }}</h1>
+<div class="cards stats-cards">
+  <div class="card"><span>Total Leads</span><strong>{{ summary.total }}</strong></div>
+  <div class="card"><span>{{ "Selected Class" if channel=="B2C" else "Proposal Sent" }}</span><strong>{{ summary.funnel[1].value if channel=="B2C" else summary.progressed }}</strong></div>
+  <div class="card"><span>{{ "Registration Confirmed" if channel=="B2C" else "Meeting Requested" }}</span><strong>{{ summary.progressed if channel=="B2C" else summary.funnel[3].value }}</strong></div>
+  <div class="card"><span>Need Action</span><strong>{{ counts.unread + counts.in_progress }}</strong></div>
+</div>
+
+<section>
+  <div class="section-head"><h2>Notifikasi</h2><span>{{ counts.unread }} unread</span></div>
+  {% if notifications %}
+  <div class="notifications">
+    {% for n in notifications %}
+    <article class="notification {{ n.status }}">
+      <div>
+        <div class="notif-title">{{ n.title }}</div>
+        <div class="muted">{{ n.message or "" }}</div>
+        <div class="tiny">{{ n.sender }} · {{ n.created_at|format_wib }}</div>
+      </div>
+      <div class="actions">
+        <a class="button ghost" href="{{ url_for('lead_detail', sender=n.sender) }}">Lihat Lead</a>
+        <form method="post" action="{{ url_for('notification_status', notification_id=n.id) }}">
+          <select name="status" onchange="this.form.submit()">
+            {% for s in ["unread","in_progress","resolved"] %}
+            <option value="{{ s }}" {{ "selected" if n.status==s else "" }}>{{ s.replace("_"," ").title() }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">Belum ada notifikasi.</div>{% endif %}
+</section>
+
+<div class="stats-grid">
+  <section class="stats-panel">
+    <div class="section-head"><h2>Conversion Funnel</h2><span>Current leads</span></div>
+    <div class="funnel-list">
+      {% for item in summary.funnel %}
+      <div class="funnel-row">
+        <span>{{ item.label }}</span><strong>{{ item.value }}</strong>
+        {% if summary.total %}<small>{{ ((item.value / summary.total) * 100)|round|int }}%</small>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="stats-panel">
+    <div class="section-head"><h2>New Leads</h2><span>Activity</span></div>
+    <div class="mini-stats">
+      <div><span>Today</span><strong>{{ summary.recent.today }}</strong></div>
+      <div><span>Last 7 Days</span><strong>{{ summary.recent.week }}</strong></div>
+      <div><span>Last 30 Days</span><strong>{{ summary.recent.month }}</strong></div>
+    </div>
+  </section>
+  <section class="stats-panel breakdown-panel">
+    <div class="section-head"><h2>{{ "Class Interest" if channel=="B2C" else "Training Interest" }}</h2><span>Lead breakdown</span></div>
+    <div class="breakdown-list">
+      {% for item in summary.breakdown %}<div><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<section>
+  <div class="section-head"><h2>Leads</h2><span>{{ leads|length }} of {{ total_leads }} customer</span></div>
+  <form class="lead-filters" method="get">
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name, phone, company...">
+    {% if channel=="B2C" %}
+      <select name="class"><option value="">All Classes</option>{% for v in ["ML","CV","NLP"] %}<option value="{{ v }}" {{ "selected" if filters.class==v else "" }}>{{ v }}</option>{% endfor %}</select>
+      <select name="registration">
+        <option value="">All Registration</option>
+        <option value="confirmed" {{ "selected" if filters.registration=="confirmed" else "" }}>Confirmed</option>
+        <option value="interested" {{ "selected" if filters.registration=="interested" else "" }}>Interested</option>
+        <option value="exploring" {{ "selected" if filters.registration=="exploring" else "" }}>Exploring</option>
+      </select>
+      <select name="payment"><option value="">All Payment</option><option value="claimed" {{ "selected" if filters.payment=="claimed" else "" }}>Needs verification</option><option value="not_claimed" {{ "selected" if filters.payment=="not_claimed" else "" }}>No claim</option></select>
+    {% else %}
+      <select name="delivery"><option value="">All Delivery</option>{% for v in ["Online","Onsite","Hybrid"] %}<option value="{{ v }}" {{ "selected" if filters.delivery==v else "" }}>{{ v }}</option>{% endfor %}</select>
+      <select name="goal"><option value="">All Training Interest</option>{% for v in ["Generative AI Tools","AI Engineering","Other"] %}<option value="{{ v }}" {{ "selected" if filters.goal==v else "" }}>{{ v }}</option>{% endfor %}</select>
+      <select name="status"><option value="">All Status</option><option value="qualifying" {{ "selected" if filters.status=="qualifying" else "" }}>Qualifying</option><option value="proposal" {{ "selected" if filters.status=="proposal" else "" }}>Proposal Sent</option><option value="meeting" {{ "selected" if filters.status=="meeting" else "" }}>Meeting Requested</option></select>
+    {% endif %}
+    <button class="button filter-button" type="submit">Filter</button>
+    <a class="button ghost" href="{{ url_for('b2c' if channel=='B2C' else 'b2b') }}">Reset</a>
+  </form>
+  <div class="table-wrap"><table>
+    <thead>{% if channel=="B2C" %}<tr><th>Customer</th><th>Class</th><th>Registration</th><th>Payment</th><th>Last Update</th></tr>{% else %}<tr><th>Company</th><th>Contact</th><th>Participants</th><th>Delivery</th><th>Status</th><th>Last Update</th></tr>{% endif %}</thead>
+    <tbody>
+    {% for l in leads %}
+      {% if channel=="B2C" %}
+      <tr onclick="location.href='{{ url_for('lead_detail', sender=l.sender) }}'"><td><strong>{{ l.contact_name or l.sender }}</strong><div class="tiny">{{ l.sender }}</div></td><td>{{ l.selected_class or "—" }}</td><td>{{ "Confirmed" if l.registration_confirmed else ("Interested" if l.registration_intent else "Exploring") }}</td><td>{{ "Needs verification" if l.payment_claimed else "—" }}</td><td>{{ l.updated_at|format_wib }}</td></tr>
+      {% else %}
+      <tr onclick="location.href='{{ url_for('lead_detail', sender=l.sender) }}'"><td><strong>{{ l.company_name or "—" }}</strong></td><td>{{ l.contact_name or l.sender }}</td><td>{{ l.participant_count or "—" }}</td><td>{{ l.preferred_delivery or "—" }}</td><td>{{ "Meeting Requested" if l.meeting_request else ("Proposal Sent" if l.proposal_sent else "Qualifying") }}</td><td>{{ l.updated_at|format_wib }}</td></tr>
+      {% endif %}
+    {% else %}<tr><td colspan="6">Tidak ada lead yang cocok dengan filter.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}
