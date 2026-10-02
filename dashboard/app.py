@@ -29,6 +29,16 @@ ALLOWED_HUMAN_UPLOADS = {
 }
 
 
+@app.template_filter("usd_to_idr")
+def usd_to_idr(value):
+    """Convert estimated USD API cost to an approximate IDR value for display."""
+    try:
+        rate = float(os.getenv("USD_TO_IDR_RATE", "16500"))
+        return f"{float(value) * rate:,.0f}".replace(",", ".")
+    except (TypeError, ValueError):
+        return "0"
+
+
 @app.template_filter("format_wib")
 def format_wib(value):
     """Convert an ISO-8601 UTC timestamp to a human-readable WIB timestamp."""

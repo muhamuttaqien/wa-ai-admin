@@ -85,7 +85,7 @@ def record_openai_usage(sender, call_type, model, response):
             """, (sender, call_type, model, input_tokens, cached, cache_write, output_tokens, cost, now))
     print(
         f"API USAGE [{call_type}] : in={input_tokens} cached={cached} "
-        f"write={cache_write} out={output_tokens} cost=${cost:.6f}"
+        f"write={cache_write} out={output_tokens} cost=${cost:.6f} (≈ Rp {cost * 16500:,.0f})"
     )
     return cost
 

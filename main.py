@@ -12,7 +12,7 @@ load_dotenv()
 from classifier import classify_message
 from conversation import add_message, count_messages, count_user_messages, get_history
 from conversation_flow import get_flow, plan_flow, update_flow
-from state_parser import parse_local_state, needs_llm_fallback, llm_state_fallback, merge_state
+from state_extractor import extract_state
 from lead_store import get_lead, upsert_lead
 from message_buffer import complete_batch, due_senders, enqueue_message, get_buffered_messages, is_batch_due, retry_batch_later
 from response_generator import generate_reply
@@ -28,11 +28,12 @@ _worker_stop = threading.Event()
 ROOT = Path(__file__).resolve().parent
 
 MEDIA = {
-    "bootcamp_infographic": (ROOT / "B2B Document" / "Infografis AI Intensitve Bootcamp.jpg", "image"),
-    "bootcamp_registration_doc": (ROOT / "B2B Document" / "Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf", "document"),
-    "bootcamp_qris": (ROOT / "B2B Document" / "QRIS Transfer Pembayaran Indonesia AI.jpg", "image"),
-    "corporate_proposal": (ROOT / "B2C Document" / "Proposal Penawaran AI Corporate Training.pdf", "document"),
+    "bootcamp_infographic": (ROOT / "B2C Document" / "Infografis AI Intensitve Bootcamp.jpg", "image"),
+    "bootcamp_registration_doc": (ROOT / "B2C Document" / "Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf", "document"),
+    "bootcamp_qris": (ROOT / "B2C Document" / "QRIS Transfer Pembayaran Indonesia AI.jpg", "image"),
+    "corporate_proposal": (ROOT / "B2B Document" / "Proposal Penawaran AI Corporate Training.pdf", "document"),
 }
+
 
 
 def _combined_text(buffered):
@@ -177,19 +178,11 @@ def process_sender_batch(sender):
         category = classification.get("category", "Unknown")
         flow = get_flow(sender)
 
-        # Milestone 6.2: parse common structured/state-aware answers locally.
-        local_state = parse_local_state(text, category, history, current, flow)
-        state = local_state
-        print("M6 LOCAL PARSER     :", local_state)
-
-        # Milestone 6.3: if the active flow expects structured data that the
-        # local parser cannot safely extract, use ONE combined LLM fallback.
-        if needs_llm_fallback(text, category, current, flow, local_state):
-            fallback_state = llm_state_fallback(text, category, history, current, sender=sender)
-            state = merge_state(local_state, fallback_state)
-            print("M6 STATE FALLBACK   : API CALL", fallback_state)
-        else:
-            print("M6 STATE FALLBACK   : SKIPPED")
+        # Semantic state extraction: one LLM call per inbound message.
+        # The previous deterministic regex/local parser has been removed so
+        # typo-heavy and free-form WhatsApp messages are interpreted semantically.
+        state = extract_state(text, category, history, current, flow, sender=sender)
+        print("STATE EXTRACTOR      : API CALL", state)
 
         updates = state["lead_updates"]
         if category in {"AI Intensive Bootcamp", "AI Corporate Training"}:
@@ -224,6 +217,13 @@ def process_sender_batch(sender):
         if flow_updates: flow=update_flow(sender,**flow_updates)
 
         plan=plan_flow(classification["category"],lead,flow)
+        requested_media = signals.get("media_request")
+        if requested_media:
+            # Explicit media requests are extracted semantically by state_extractor.
+            # They bypass one-time send flags without resetting or advancing state.
+            plan = dict(plan)
+            plan["media"] = requested_media
+            print(f"MEDIA REQUEST: {requested_media}")
         print(f"FLOW STAGE : {plan['stage']}")
         print(f"MEDIA      : {plan['media']}")
         print(f"QUESTION   : {plan['question']}")
@@ -255,7 +255,7 @@ def process_sender_batch(sender):
             )
 
         # Human-action notifications are event based, not inferred by the dashboard.
-        if classification["category"] == "AI Intensive Bootcamp" and flow.get("payment_claimed"):
+        if classification["category"] == "AI Intensive Bootcamp" and signals.get("payment_claimed"):
             create_notification(
                 sender, "B2C", "REGISTRATION_PAYMENT_CONFIRMATION",
                 "Konfirmasi pendaftaran & pembayaran",

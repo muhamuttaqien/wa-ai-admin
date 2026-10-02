@@ -6,7 +6,7 @@ from usage_store import record_openai_usage
 
 load_dotenv()
 client = OpenAI()
-MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
+MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6")
 
 def history_text(history):
     if not history:

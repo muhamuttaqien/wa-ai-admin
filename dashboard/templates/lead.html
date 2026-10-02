@@ -35,7 +35,7 @@
         <dt>Cached Input</dt><dd>{{ "{:,}".format(api_usage.cached_input_tokens) }}</dd>
         <dt>Cache Writes</dt><dd>{{ "{:,}".format(api_usage.cache_write_tokens) }}</dd>
         <dt>Output Tokens</dt><dd>{{ "{:,}".format(api_usage.output_tokens) }}</dd>
-        <dt>Estimated Cost</dt><dd class="api-cost">${{ "%.6f"|format(api_usage.estimated_cost_usd) }}</dd>
+        <dt>Estimated Cost</dt><dd class="api-cost">${{ "%.6f"|format(api_usage.estimated_cost_usd) }} <span class="tiny">(≈ Rp {{ api_usage.estimated_cost_usd|usd_to_idr }})</span></dd>
       </dl>
       {% if api_usage.by_type %}
       <div class="api-breakdown">

@@ -1,16 +1,21 @@
 # WhatsApp AI Admin — Indonesia AI
 
-AI-powered WhatsApp admin for **Indonesia AI**, built on the official Meta WhatsApp Cloud API, FastAPI, OpenAI, SQLite, and a Flask admin dashboard.
+AI-powered WhatsApp admin untuk **Indonesia AI**, dibangun menggunakan official Meta WhatsApp Business Platform / Cloud API, FastAPI, OpenAI API, SQLite, dan Flask Admin Dashboard.
 
-The current repository is **Milestone 6C**. It supports AI Intensive Bootcamp (B2C) and AI Corporate Training (B2B), persistent lead/conversation state, grounded business knowledge, automated media delivery, inactivity follow-up, human handoff, dashboard replies and file uploads, API-cost optimization, prompt caching, per-lead token/cost telemetry, and GPT-5.6 Luna as the default active model.
+Repository saat ini melayani dua jalur utama:
+
+- **B2C — AI Intensive Bootcamp**
+- **B2B — AI Corporate Training**
+
+Versi aktif saat ini menggunakan **semantic state extraction berbasis LLM pada setiap inbound customer message**. Implementasi `state_parser.py` berbasis local regex telah dihapus karena terlalu rentan terhadap typo, singkatan, dan variasi bahasa WhatsApp. Periodic product classification dan cache-friendly response generation tetap dipertahankan untuk mengontrol biaya API.
 
 ---
 
 # 1. Quick Start
 
-Run the system from **three terminals**.
+Jalankan sistem dari tiga terminal.
 
-First enter the project and activate the environment in each terminal as needed:
+Masuk ke project dan aktifkan environment:
 
 ```bash
 cd ~/Desktop/Indonesia-AI/wa-ai-admin
@@ -23,13 +28,13 @@ conda activate indonesia-ai
 ngrok http 8000 --url https://moneyless-stroller-mounted.ngrok-free.dev
 ```
 
-Current public webhook:
+Webhook development:
 
 ```text
 https://moneyless-stroller-mounted.ngrok-free.dev/webhook
 ```
 
-The same callback URL must be configured in Meta Developer → WhatsApp → Webhooks.
+Callback yang sama harus dikonfigurasi pada Meta Developer App.
 
 ## Terminal 2 — FastAPI / WhatsApp AI Admin
 
@@ -43,12 +48,14 @@ Local service:
 http://127.0.0.1:8000
 ```
 
-Main endpoints:
+Main webhook endpoints:
 
 ```text
 GET  /webhook    Meta webhook verification
 POST /webhook    Incoming WhatsApp events
 ```
+
+Setelah mengubah source code atau `.env`, restart Uvicorn apabila tidak menjalankannya dengan `--reload`.
 
 ## Terminal 3 — Admin Dashboard
 
@@ -56,99 +63,19 @@ POST /webhook    Incoming WhatsApp events
 python dashboard/app.py
 ```
 
-With the recommended configuration below, open:
+Dengan `.env.example` saat ini:
 
 ```text
-http://127.0.0.1:10080
+http://127.0.0.1:8080
 ```
 
-Keep the dashboard on `127.0.0.1` during development. It currently has no production-grade authentication layer and should not be exposed publicly as-is.
+Dashboard sebaiknya tetap di `127.0.0.1` selama development karena belum memiliki production-grade authentication.
 
 ---
 
-# 2. Environment Configuration (`.env`)
+# 2. Installation
 
-Create `.env` in the repository root:
-
-```bash
-nano .env
-```
-
-Recommended current configuration:
-
-```env
-# =========================================================
-# OpenAI
-# =========================================================
-OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-
-# Milestone 6C default
-OPENAI_MODEL=gpt-5.6-luna
-
-# To compare against GPT-5.6 Sol, temporarily use:
-# OPENAI_MODEL=gpt-5.6
-
-# =========================================================
-# Meta WhatsApp Cloud API
-# =========================================================
-WHATSAPP_ACCESS_TOKEN=YOUR_META_WHATSAPP_ACCESS_TOKEN
-WHATSAPP_PHONE_NUMBER_ID=1408846128968304
-WHATSAPP_GRAPH_API_VERSION=v26.0
-WHATSAPP_VERIFY_TOKEN=YOUR_PRIVATE_WEBHOOK_VERIFY_TOKEN
-
-# =========================================================
-# Conversation / SQLite
-# =========================================================
-CONVERSATION_DB_PATH=data/conversations.db
-CONVERSATION_MAX_MESSAGES=15
-
-# =========================================================
-# Natural reply timing / buffering
-# =========================================================
-REPLY_DELAY_MIN_SECONDS=5
-REPLY_DELAY_MAX_SECONDS=15
-BUBBLE_DELAY_MIN_SECONDS=1.0
-BUBBLE_DELAY_MAX_SECONDS=2.5
-BUFFER_POLL_SECONDS=1.0
-MAX_BATCH_AGE_SECONDS=45
-
-# =========================================================
-# B2C inactivity follow-up
-# =========================================================
-B2C_FOLLOWUP_ENABLED=true
-B2C_PRE_REGISTRATION_FOLLOWUP_HOURS=3
-B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
-
-# =========================================================
-# B2B inactivity follow-up
-# =========================================================
-B2B_FOLLOWUP_ENABLED=true
-B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
-B2B_POST_PROPOSAL_FOLLOWUP_HOURS=24
-
-# =========================================================
-# Admin Dashboard
-# =========================================================
-DASHBOARD_HOST=127.0.0.1
-DASHBOARD_PORT=10080
-DASHBOARD_MAX_UPLOAD_MB=20
-```
-
-## Important `.env` notes
-
-`OPENAI_MODEL` is shared by the active Milestone 6 LLM calls: classifier, state fallback, and response generator. The current default in code is `gpt-5.6-luna`.
-
-`WHATSAPP_ACCESS_TOKEN` must be a valid Meta access token. A `401` with Meta error code `190` indicates an authentication/token problem rather than an AI-flow problem. Temporary development tokens can expire; use an appropriate long-lived/System User setup for a persistent deployment.
-
-`CONVERSATION_DB_PATH` is shared by the FastAPI service and Flask dashboard. `CONVERSATION_MAX_MESSAGES` controls recent history loaded into model context, not how much history is retained in SQLite.
-
-Never commit `.env`, API keys, Meta tokens, webhook secrets, or a live customer database.
-
----
-
-# 3. Installation
-
-Install dependencies:
+Install dependency:
 
 ```bash
 pip install -r requirements.txt
@@ -165,11 +92,72 @@ requests
 Flask>=3.0,<4.0
 ```
 
-The project is currently developed with Conda:
+---
 
-```bash
-conda activate indonesia-ai
+# 3. Environment Configuration
+
+Gunakan `.env.example` sebagai template dan simpan credential sebenarnya hanya di `.env` lokal.
+
+```env
+# ============================================================
+# WHATSAPP / META / OPENAI CLOUD API
+# ============================================================
+OPENAI_MODEL=gpt-5.6
+OPENAI_API_KEY=
+
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=1408846128968304
+WHATSAPP_GRAPH_API_VERSION=v26.0
+
+# ============================================================
+# CONVERSATION MEMORY / DATABASE
+# ============================================================
+CONVERSATION_DB_PATH=data/conversations.db
+CONVERSATION_MAX_MESSAGES=15
+
+# ============================================================
+# MESSAGE BUFFER & NATURAL REPLY TIMING
+# ============================================================
+REPLY_DELAY_MIN_SECONDS=5
+REPLY_DELAY_MAX_SECONDS=15
+BUBBLE_DELAY_MIN_SECONDS=1.0
+BUBBLE_DELAY_MAX_SECONDS=2.5
+BUFFER_POLL_SECONDS=1.0
+MAX_BATCH_AGE_SECONDS=45
+
+# ============================================================
+# B2C FOLLOW-UP
+# ============================================================
+B2C_FOLLOWUP_ENABLED=true
+B2C_PRE_REGISTRATION_FOLLOWUP_HOURS=3
+B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
+
+# ============================================================
+# B2B FOLLOW-UP
+# ============================================================
+B2B_FOLLOWUP_ENABLED=true
+B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
+B2B_POST_PROPOSAL_FOLLOWUP_HOURS=24
+
+# ============================================================
+# ADMIN DASHBOARD
+# ============================================================
+DASHBOARD_HOST=127.0.0.1
+DASHBOARD_PORT=8080
+DASHBOARD_MAX_UPLOAD_MB=20
+
+# Approximate USD → IDR display rate on dashboard
+USD_TO_IDR_RATE=16500
 ```
+
+## Important notes
+
+`OPENAI_MODEL=gpt-5.6` adalah konfigurasi aktif yang direkomendasikan saat ini. `classifier.py`, `state_extractor.py`, dan `response_generator.py` membaca model dari environment variable yang sama.
+
+`.env` tidak boleh di-commit. Pastikan `.gitignore` tetap mengecualikan `.env`, database SQLite runtime, Python cache, dan environment lokal.
+
+Meta temporary access token dapat expire. Error Meta `401` dengan OAuth error code `190` menunjukkan masalah authentication/access token, bukan masalah flow AI.
 
 ---
 
@@ -182,24 +170,28 @@ WhatsApp Customer
 Meta WhatsApp Cloud API
        │
        ▼
-FastAPI webhook / main.py
+FastAPI Webhook (main.py)
        │
-       ├── inbound buffering / debounce
-       ├── load persistent lead + conversation state
+       ├── Message buffer / debounce
+       ├── Persistent conversation + lead state
        │
-       ├── Milestone 6 optimized understanding
-       │     ├── periodic semantic classifier
-       │     ├── local state-aware parser
-       │     └── single LLM state fallback when needed
+       ├── Periodic semantic product classifier
        │
-       ├── deterministic B2C/B2B flow planner
-       ├── grounded Indonesia AI knowledge
-       ├── style + curated business links
-       ├── cache-friendly LLM response generation
-       ├── automatic documents/images
-       ├── follow-up scheduler
-       ├── admin notifications
-       └── per-lead OpenAI usage telemetry
+       ├── Semantic State Extractor (LLM, every inbound turn)
+       │
+       ├── Deterministic B2C/B2B Conversation Flow
+       │
+       ├── Grounded business knowledge + curated links
+       │
+       ├── Media / document actions
+       │
+       ├── Cache-friendly Response Generator
+       │
+       ├── Follow-up scheduler
+       │
+       ├── Admin notifications / human handoff
+       │
+       └── OpenAI usage telemetry
        │
        ▼
 Meta WhatsApp Cloud API
@@ -209,44 +201,61 @@ WhatsApp Customer
 
 SQLite
   │
-  ├── messages / leads / state / flow
-  ├── follow-ups / notifications
-  ├── inbound buffers / reply batches
+  ├── conversations
+  ├── lead profile / flow state
+  ├── message buffers
+  ├── follow-ups
+  ├── admin notifications
   └── api_usage
        │
        ▼
 Flask Admin Dashboard
        │
        ├── B2C / B2B leads
-       ├── lead detail + history
-       ├── OpenAI token/cost telemetry
-       ├── notifications / human handling
-       └── text + PDF/JPG/PNG reply through Meta
+       ├── conversation history
+       ├── API token/cost telemetry
+       ├── human notifications
+       └── human text/media reply
 ```
 
-The design principle is: **deterministic business state where possible, LLM generation where useful**. The application does not make the LLM rediscover simple structured state on every turn.
+Prinsip utamanya adalah:
+
+```text
+Semantic understanding → deterministic business flow → controlled action/media → natural response generation
+```
+
+LLM memahami bahasa customer, sedangkan keputusan bisnis seperti stage, media yang harus dikirim, notification, dan follow-up tetap dikontrol oleh application logic.
 
 ---
 
-# 5. Milestone 6 — API Cost Optimization
+# 5. Semantic Understanding Pipeline
 
-Milestone 6 reduces unnecessary OpenAI calls while keeping customer-facing replies dynamic.
+## 5.1 Periodic Product Classification
 
-## 5.1 Periodic re-classification
-
-`product_interest` remains persistent in the lead profile, but classification is not skipped forever.
-
-Current behavior in `main.py`:
+`classifier.py` menentukan salah satu kategori:
 
 ```text
-Product not known        → classifier API call
-Product already known    → reuse persistent category
-Every 10th user message  → classifier API refresh
+AI Intensive Bootcamp
+AI Corporate Training
+Unknown
 ```
 
-Only incoming customer/user messages are counted for this periodic refresh. AI/human-admin bubbles do not count toward the 10-message interval.
+Untuk menghemat API call, classification tidak dilakukan pada setiap message jika `product_interest` sudah diketahui.
 
-Runtime logs show the path, for example:
+Current behavior:
+
+```text
+Inbound #1, product unknown → classifier API call
+Inbound #2–#9             → reuse persistent product_interest
+Inbound #10               → classifier API refresh
+Inbound #11–#19           → reuse persistent product_interest
+Inbound #20               → classifier API refresh
+... dan seterusnya
+```
+
+Hanya inbound customer/user messages yang dihitung.
+
+Contoh terminal log:
 
 ```text
 M6 CLASSIFIER : API CALL (product not known; inbound #1)
@@ -254,52 +263,291 @@ M6 CLASSIFIER : SKIPPED (persistent state; inbound #4)
 M6 CLASSIFIER : API CALL (10-message refresh; inbound #10)
 ```
 
-## 5.2 Local state-aware parser
+Periodic refresh memungkinkan conversation yang panjang berpindah dari Bootcamp ke Corporate Training atau sebaliknya tanpa mengunci kategori selamanya.
 
-`state_parser.py` handles common structured information locally, avoiding an API call when the answer is clear.
+## 5.2 Semantic State Extractor
 
-Examples include:
+`state_extractor.py` menggantikan local regex/state parser lama.
 
-- Bootcamp track: ML / CV / NLP.
-- Registration intent and quantity.
-- Payment claim.
-- Participant count.
-- Online / onsite / hybrid preference.
-- Quick Call / Meeting intent.
-- Context-aware confirmations such as `iya`, when the previous question makes the meaning clear.
-- B2C progression signals such as an explicit Bootcamp inquiry.
+State extractor dipanggil **sekali untuk setiap inbound customer turn** dan hanya mengembalikan structured JSON, bukan customer-facing response.
 
-This parser determines state, not fixed customer-facing wording. The final reply is still generated by the response model.
+Contoh output:
 
-## 5.3 Single-call LLM state fallback
-
-When local parsing is insufficient, `state_parser.py` can make one semantic fallback call. This is especially useful for free-form B2B information such as company context, division, or training goals.
-
-The optimized path is therefore:
-
-```text
-Incoming message
-      ↓
-Local parser
-      │
-      ├── sufficient ──────────────┐
-      │                            │
-      └── ambiguous → 1 LLM call ──┤
-                                   ↓
-                         deterministic flow
-                                   ↓
-                         response generator
+```json
+{
+  "lead_updates": {
+    "selected_class": "CV"
+  },
+  "signals": {
+    "selected_class": "CV"
+  }
+}
 ```
 
-The older `lead_extractor.py` and `flow_analyzer.py` remain in the repository for reference/rollback, but the current `main.py` no longer uses them as the normal Milestone 6 extraction pipeline.
+State extractor dapat menangkap antara lain:
+
+```text
+contact_name
+company_name
+representative_division
+participant_count
+training_goal
+experience_level
+preferred_delivery
+location
+selected_class
+registration_intent
+registration_quantity
+b2c_intro_confirmed
+registration_confirmed
+payment_claimed
+meeting_request
+```
+
+Extractor menggunakan recent history untuk memahami jawaban singkat dan konteks. Ia juga diinstruksikan memahami typo/singkatan secara semantik, misalnya:
+
+```text
+"sudah saa trannnsfer kak"
+"udh tf"
+"barusan bayar"
+```
+
+Jika konteksnya jelas, pesan tersebut dapat menghasilkan:
+
+```json
+{"signals":{"payment_claimed":true}}
+```
+
+Ini penting karena `payment_claimed` digunakan untuk membuat notification pembayaran dan membuka Human Reply di dashboard.
+
+## 5.3 Local State Parser Removed
+
+`state_parser.py` **tidak lagi digunakan dan telah dihapus** dari current architecture.
+
+Alasan utamanya adalah local regex parser dapat sukses secara teknis tetapi gagal secara semantik pada bahasa WhatsApp yang memiliki typo, singkatan, variasi susunan kata, dan konteks percakapan.
+
+Current pipeline tidak lagi memiliki log:
+
+```text
+M6 LOCAL PARSER
+M6 STATE FALLBACK
+```
+
+Sebagai gantinya:
+
+```text
+STATE EXTRACTOR : API CALL {...}
+```
+
+Legacy `lead_extractor.py` dan `flow_analyzer.py` masih tersedia sebagai reference/rollback, tetapi bukan bagian dari active `main.py` pipeline.
 
 ---
 
-# 6. Milestone 6A — Token / Cost Telemetry per Lead
+# 6. Conversation Flow
 
-`usage_store.py` records OpenAI usage in SQLite per WhatsApp sender.
+`conversation_flow.py` menentukan stage bisnis berdasarkan lead state dan semantic signals.
 
-Each active API call can record:
+LLM tidak diberi kebebasan untuk menentukan sendiri apakah proposal, QRIS, PDF pendaftaran, atau infographic harus dikirim. `main.py` dan flow planner yang mengontrol action tersebut.
+
+Ini memisahkan:
+
+```text
+Understanding  → state_extractor.py
+Business flow  → conversation_flow.py
+Wording        → response_generator.py
+Delivery       → main.py + whatsapp.py
+```
+
+---
+
+# 7. B2C — AI Intensive Bootcamp
+
+Current high-level flow:
+
+```text
+Bootcamp inquiry
+      ↓
+B2C_OVERVIEW
+      ↓
+Bootcamp infographic
+      ↓
+ML / CV / NLP selection
+      ↓
+Class-specific information + responsive Q&A
+      ↓
+Registration intent
+      ↓
+Confirm selected class + quantity
+      ↓
+Registration procedure PDF + QRIS
+      ↓
+Customer claims payment
+      ↓
+Payment acknowledgement
+      ↓
+REGISTRATION_PAYMENT_CONFIRMATION notification
+      ↓
+Human Reply becomes available
+```
+
+Current Bootcamp document mapping:
+
+```text
+B2C Document/
+├── Infografis AI Intensitve Bootcamp.jpg
+├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
+└── QRIS Transfer Pembayaran Indonesia AI.jpg
+```
+
+Do not move these Bootcamp assets into `B2B Document/` unless the media mapping in `main.py` is intentionally changed as well.
+
+---
+
+# 8. B2B — AI Corporate Training
+
+Current high-level flow:
+
+```text
+Corporate Training inquiry
+      ↓
+name + company + representative division/team
+      ↓
+participant estimate
+      ↓
+online / onsite / hybrid
+      ↓
+training goal
+      ↓
+Corporate Training proposal PDF
+      ↓
+responsive discussion
+      ↓
+Quick Call / Quick Meeting when requested
+      ↓
+human handling when required
+```
+
+Current Corporate document mapping:
+
+```text
+B2B Document/
+└── Proposal Penawaran AI Corporate Training.pdf
+```
+
+---
+
+# 9. Automated Media Delivery
+
+`main.py` owns the canonical automated media mapping:
+
+```text
+bootcamp_infographic
+→ B2C Document/Infografis AI Intensitve Bootcamp.jpg
+
+bootcamp_registration_doc
+→ B2C Document/Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
+
+bootcamp_qris
+→ B2C Document/QRIS Transfer Pembayaran Indonesia AI.jpg
+
+corporate_proposal
+→ B2B Document/Proposal Penawaran AI Corporate Training.pdf
+```
+
+For Bootcamp registration, the system sends a bundle in this order:
+
+```text
+1. Registration/payment procedure PDF
+2. QRIS image
+3. Natural admin guidance/reply
+```
+
+For other assets, the normal pattern is explanatory bubble → asset → remaining bubble(s).
+
+If a required file does not exist, `main.py` raises an explicit `Media file tidak ditemukan` error instead of pretending the file was sent.
+
+---
+
+# 10. Media Resend
+
+Customers can request previously delivered material again.
+
+Examples:
+
+```text
+kirim ulang QRIS
+kirim QRIS lagi
+kirim ulang prosedur pendaftaran
+kirim PDF lagi
+kirim ulang infografis
+kirim ulang proposal
+```
+
+For B2C, a generic `kirim ulang` can resend the most recently relevant asset. If registration documents were already delivered, the system resends the registration bundle (procedure PDF + QRIS).
+
+Resend is an explicit delivery action and should not unnecessarily advance the business stage.
+
+---
+
+# 11. Cache-Friendly Response Generator
+
+`response_generator.py` tetap menggunakan LLM untuk menghasilkan natural customer-facing wording.
+
+Prompt dipisahkan menjadi stable prefix dan dynamic suffix:
+
+```text
+STABLE PREFIX
+├── admin behavior/rules
+├── business knowledge
+├── style
+├── curated links
+└── promotion context
+       │
+       ▼
+ explicit cache breakpoint
+════════════════════════════
+DYNAMIC SUFFIX
+├── lead profile
+├── recent conversation history
+├── product category
+├── latest customer message
+├── current flow stage
+└── follow-up context
+```
+
+Current response call menggunakan explicit prompt caching dengan TTL 30 menit.
+
+Caching tidak membuat reply menjadi statis. Customer message, history, lead state, dan flow stage tetap dinamis. Tujuannya hanya mengurangi biaya pemrosesan stable prompt yang berulang.
+
+---
+
+# 12. OpenAI Model Selection
+
+Default current configuration:
+
+```env
+OPENAI_MODEL=gpt-5.6
+```
+
+Active components yang membaca variable ini:
+
+```text
+classifier.py
+state_extractor.py
+response_generator.py
+```
+
+Jika ingin melakukan eksperimen dengan model lain yang memang didukung oleh code/pricing telemetry, ubah `.env` lalu restart Uvicorn.
+
+Current production/development preference repository ini adalah GPT-5.6 (`gpt-5.6`) karena semantic state extraction dan customer-facing conversation membutuhkan pemahaman bahasa yang cukup kuat.
+
+---
+
+# 13. OpenAI API Usage Telemetry
+
+`usage_store.py` menyimpan telemetry per WhatsApp sender ke SQLite.
+
+Stored fields:
 
 ```text
 sender
@@ -313,31 +561,21 @@ estimated_cost_usd
 created_at
 ```
 
-Current call types include:
+Active call types:
 
 ```text
 classifier
-state_fallback
+state_extractor
 response_generator
 ```
 
-The database table is:
+Contoh terminal log:
 
 ```text
-api_usage
+API USAGE [response_generator] : in=5212 cached=4237 write=0 out=101 cost=$0.006763 (≈ Rp 112)
 ```
 
-## Inspect one lead from terminal
-
-```bash
-python inspect_api_usage.py 628xxxxxxxxxx
-```
-
-The output summarizes API calls, input tokens, cached input, cache writes, output tokens, estimated USD cost, and usage by call type.
-
-## Dashboard telemetry
-
-Lead Detail contains an **OpenAI API Usage** section showing:
+Dashboard Lead Detail juga menampilkan:
 
 ```text
 API Calls
@@ -345,122 +583,39 @@ Input Tokens
 Cached Input
 Cache Writes
 Output Tokens
-Estimated Cost
-usage by call type
+Estimated Cost $...
+≈ Rp ...
 ```
 
-The cost is an estimate produced by `usage_store.py`; it should be treated as operational telemetry rather than an invoice. If OpenAI pricing changes, update the rate constants in that file.
-
----
-
-# 7. Milestone 6B — Cache-Friendly Response Generator
-
-`response_generator.py` separates the prompt into a stable prefix and dynamic suffix.
-
-Conceptually:
-
-```text
-STABLE PREFIX
-├── AI Admin instructions
-├── business knowledge
-├── style
-├── curated links
-└── promo context
-        │
-        ▼
- explicit cache breakpoint
-════════════════════════════
-DYNAMIC SUFFIX
-├── lead profile
-├── recent conversation history
-├── category
-├── newest customer message
-├── program-flow stage
-└── follow-up control
-```
-
-The current response call uses explicit prompt caching with a 30-minute TTL:
-
-```python
-prompt_cache_options={"mode": "explicit", "ttl": "30m"}
-```
-
-The stable developer block contains the explicit cache breakpoint. Dynamic lead/history content is placed after it.
-
-Prompt caching does **not** make replies fixed. It reuses processing of the stable prefix; each customer reply is still generated from the current message, history, lead state, and flow stage.
-
-Use Milestone 6A telemetry to verify whether `cached_input_tokens` increases during repeated calls.
-
----
-
-# 8. Milestone 6C — GPT-5.6 Luna
-
-The active Milestone 6 model is configurable through `.env`:
+Dashboard membaca approximate conversion rate dari:
 
 ```env
-OPENAI_MODEL=gpt-5.6-luna
+USD_TO_IDR_RATE=16500
 ```
 
-The following active components read this setting:
+Catatan: current terminal formatting di `usage_store.py` menggunakan `16500` secara langsung, sedangkan dashboard membaca `USD_TO_IDR_RATE`. Jika ingin kurs terminal ikut configurable, ubah `usage_store.py` agar membaca environment variable yang sama.
+
+Telemetry cost adalah operational estimate, bukan billing invoice resmi.
+
+Inspect usage satu lead:
+
+```bash
+python inspect_api_usage.py 628xxxxxxxxxx
+```
+
+---
+
+# 14. Conversation Memory and Persistent Lead State
+
+Default database:
 
 ```text
-classifier.py
-state_parser.py
-response_generator.py
+data/conversations.db
 ```
 
-To A/B test against Sol:
+`conversation.py` menyimpan conversation history. Structured lead dan program flow disimpan melalui komponen state terkait.
 
-```env
-OPENAI_MODEL=gpt-5.6
-```
-
-Then restart Uvicorn.
-
-`usage_store.py` is model-aware for the GPT-5.6 Sol/Luna identifiers currently supported by this repository, so telemetry uses the matching configured rate table. Unknown models are deliberately recorded with an estimated cost of `$0` rather than silently applying the wrong rate.
-
-Note: legacy/reference files may still contain older hard-coded model names. They are not part of the normal optimized `main.py` pipeline.
-
----
-
-# 9. Semantic Classification
-
-`classifier.py` classifies the conversation into:
-
-```text
-AI Intensive Bootcamp
-AI Corporate Training
-Unknown
-```
-
-Classification is semantic and can use conversation context. Once a valid product is identified, the category is persisted in the lead profile and reused between periodic classifier refreshes.
-
----
-
-# 10. Buffering and Natural Reply Timing
-
-`message_buffer.py` groups consecutive customer bubbles before processing them as one conversational unit.
-
-Relevant settings:
-
-```env
-REPLY_DELAY_MIN_SECONDS=5
-REPLY_DELAY_MAX_SECONDS=15
-BUFFER_POLL_SECONDS=1.0
-MAX_BATCH_AGE_SECONDS=45
-BUBBLE_DELAY_MIN_SECONDS=1.0
-BUBBLE_DELAY_MAX_SECONDS=2.5
-```
-
-This helps avoid replying prematurely when a customer sends several short WhatsApp bubbles in succession.
-
----
-
-# 11. Persistent Conversation Memory and Lead State
-
-`conversation.py` stores chat history in SQLite. `lead_store.py`, `question_state.py`, and `conversation_flow.py` maintain structured state alongside raw messages.
-
-Conversation roles include:
+Conversation roles mencakup:
 
 ```text
 user
@@ -468,19 +623,34 @@ assistant
 human_admin
 ```
 
-Human-admin replies are therefore visible to subsequent AI turns as part of the conversation context.
+Human admin reply yang berhasil dikirim juga masuk history sehingga AI pada turn berikutnya dapat memahami intervensi admin sebelumnya.
 
-The default database is:
-
-```text
-data/conversations.db
-```
+`CONVERSATION_MAX_MESSAGES` mengontrol recent context yang dimuat untuk model, bukan berarti database hanya menyimpan sejumlah itu.
 
 ---
 
-# 12. Grounded Indonesia AI Knowledge
+# 15. Message Buffer and Natural Reply Timing
 
-Authoritative business context is kept outside the LLM in Markdown files:
+Customer sering mengirim beberapa WhatsApp bubble secara berurutan. `message_buffer.py` menggabungkannya sebelum satu conversational turn diproses.
+
+Relevant settings:
+
+```env
+REPLY_DELAY_MIN_SECONDS=5
+REPLY_DELAY_MAX_SECONDS=15
+BUBBLE_DELAY_MIN_SECONDS=1.0
+BUBBLE_DELAY_MAX_SECONDS=2.5
+BUFFER_POLL_SECONDS=1.0
+MAX_BATCH_AGE_SECONDS=45
+```
+
+Short acknowledgement seperti `baik kak` atau `OK kak` dapat disimpan tanpa memaksa AI mengirim bubble balasan tambahan.
+
+---
+
+# 16. Grounded Business Knowledge
+
+Business facts dipisahkan dari LLM behavior dan disimpan di:
 
 ```text
 knowledge/
@@ -489,7 +659,7 @@ knowledge/
 └── intensive_bootcamp.md
 ```
 
-Styles are separated similarly:
+Conversation style disimpan di:
 
 ```text
 styles/
@@ -498,110 +668,52 @@ styles/
 └── neutral.md
 ```
 
-`knowledge_loader.py`, `style_loader.py`, and `business_links.py` feed controlled context into response generation.
+Supporting modules:
 
-Time-sensitive facts such as active Bootcamp batch dates, prices, promotions, schedules, and registration information must be reviewed whenever the business offering changes.
+```text
+knowledge_loader.py
+style_loader.py
+business_links.py
+```
+
+Business facts yang berubah seiring waktu, seperti batch date, price, promotion, schedule, curriculum links, dan registration information harus diperbarui pada controlled knowledge source, bukan dibiarkan ditebak model.
 
 ---
 
-# 13. B2C — AI Intensive Bootcamp Flow
+# 17. Follow-up Scheduler
 
-The current B2C flow is intentionally concise:
+`followup_scheduler.py` mengelola persistent inactivity follow-up.
 
-```text
-Bootcamp inquiry
-      ↓
-short overview + infographic
-      ↓
-ML / CV / NLP selection
-      ↓
-class-specific information / responsive Q&A
-      ↓
-registration intent
-      ↓
-confirm class + quantity
-      ↓
-registration/payment procedure + QRIS
-      ↓
-payment claim
-      ↓
-acknowledgement + human/payment verification
-```
-
-Current Bootcamp assets are stored under the existing directory name:
+Default schedule:
 
 ```text
-B2B Document/
-├── Infografis AI Intensitve Bootcamp.jpg
-├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
-└── QRIS Transfer Pembayaran Indonesia AI.jpg
+B2C pre-registration    3 hours
+B2C post-registration  12 hours
+B2B pre-proposal        3 hours
+B2B post-proposal       24 hours
 ```
 
-The folder name is retained for compatibility even though these are B2C assets.
+Config:
+
+```env
+B2C_FOLLOWUP_ENABLED=true
+B2C_PRE_REGISTRATION_FOLLOWUP_HOURS=3
+B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
+
+B2B_FOLLOWUP_ENABLED=true
+B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
+B2B_POST_PROPOSAL_FOLLOWUP_HOURS=24
+```
+
+Inbound customer activity dan human handling dapat membatalkan/reset follow-up yang relevan.
 
 ---
 
-# 14. B2B — AI Corporate Training Flow
+# 18. Admin Notifications and Human Handoff
 
-The Corporate Training flow gathers the minimum information needed for a useful business follow-up:
+`notification_store.py` menyimpan actionable notifications di table `admin_notifications`.
 
-```text
-name + company + division/team
-      ↓
-participant estimate
-      ↓
-online / onsite preference
-      ↓
-training goal
-      ↓
-proposal
-      ↓
-responsive discussion / Quick Call / Meeting
-```
-
-Current proposal asset:
-
-```text
-B2C Document/
-└── Proposal Penawaran AI Corporate Training.pdf
-```
-
-Again, the existing folder name is retained for compatibility even though this is a B2B asset.
-
----
-
-# 15. WhatsApp Media and Documents
-
-`whatsapp.py` handles official Meta Cloud API outbound delivery, including local media upload to Meta and sending media by returned media ID.
-
-The automated flow can send Bootcamp infographic, registration procedure, QRIS, and Corporate Training proposal assets.
-
-A Meta `401` / OAuth error code `190` indicates an access-token authentication issue. Refresh/replace the Meta token and restart the service rather than changing the AI pipeline.
-
----
-
-# 16. Follow-up Scheduler
-
-`followup_scheduler.py` stores inactivity follow-ups persistently in SQLite.
-
-Current defaults:
-
-```text
-B2C pre-registration       3 hours
-B2C post-registration     12 hours
-B2B pre-proposal           3 hours
-B2B post-proposal         24 hours
-```
-
-Inbound customer activity resets/cancels the relevant pending follow-up. Human handling also cancels applicable automation when appropriate.
-
----
-
-# 17. Admin Notifications
-
-`notification_store.py` creates actionable dashboard notifications.
-
-Current examples:
+Current notification examples:
 
 ```text
 B2C
@@ -613,11 +725,65 @@ B2B
 - QUICK_MEETING_REQUESTED
 ```
 
-Notification status can progress through unread/in-progress/resolved states according to the dashboard workflow.
+Status:
+
+```text
+unread
+in_progress
+resolved
+```
+
+Human Reply hanya tersedia ketika lead memiliki notification dengan status:
+
+```text
+unread
+atau
+in_progress
+```
+
+Jika tidak ada open notification, dashboard menampilkan:
+
+```text
+Human reply hanya tersedia ketika ada notifikasi aktif untuk lead ini.
+```
+
+## Payment handoff
+
+Ketika state extractor menghasilkan:
+
+```json
+{"signals":{"payment_claimed":true}}
+```
+
+`main.py` membuat:
+
+```text
+REGISTRATION_PAYMENT_CONFIRMATION
+```
+
+Flow yang diharapkan:
+
+```text
+Customer: "sudah saya transfer kak"
+        ↓
+state_extractor → payment_claimed=true
+        ↓
+AI acknowledges payment claim
+        ↓
+REGISTRATION_PAYMENT_CONFIRMATION created as unread
+        ↓
+Human Reply unlocked
+        ↓
+Admin verifies payment / responds
+        ↓
+notification can be resolved
+```
+
+Dashboard tidak menginfer notification dari wording AI. Notification harus dibuat sebagai explicit application event.
 
 ---
 
-# 18. Admin Dashboard
+# 19. Admin Dashboard
 
 Start:
 
@@ -625,33 +791,36 @@ Start:
 python dashboard/app.py
 ```
 
-Default local URL:
+Routes utama:
 
 ```text
-http://127.0.0.1:10080
+/       redirect to B2C
+/b2c    B2C leads
+/b2b    B2B leads
+/lead/<sender>  Lead Detail
 ```
 
-Current dashboard capabilities include:
+Current capabilities:
 
-- B2C lead list.
-- B2B lead list.
-- Filters and summary statistics.
-- Funnel-related lead information.
-- Lead Detail.
-- Conversation history.
-- Follow-up information.
-- Admin notifications.
-- OpenAI API usage/cost telemetry.
-- Human Handling.
-- Human text/media reply.
+```text
+B2C/B2B lead lists
+filters and summary statistics
+lead detail
+conversation history
+follow-up information
+admin notifications
+OpenAI API usage/cost telemetry
+human handling
+text/media reply
+```
 
-Dashboard timestamps are formatted for admin readability in WIB while persisted timestamps can remain UTC.
+Dashboard timestamps ditampilkan dalam WIB untuk admin readability.
 
 ---
 
-# 19. Human Handling and File Upload
+# 20. Human Admin Text and File Upload
 
-When a lead has an actionable Human Handling state, an admin can reply from Lead Detail using the same Meta WhatsApp Cloud API.
+Jika terdapat open notification, admin dapat membalas customer melalui Lead Detail menggunakan Meta WhatsApp Cloud API yang sama.
 
 Supported modes:
 
@@ -661,7 +830,7 @@ file only
 text + file
 ```
 
-Supported upload types:
+Supported file types:
 
 ```text
 PDF
@@ -669,50 +838,73 @@ JPG / JPEG
 PNG
 ```
 
-For text + file, the text is used as the WhatsApp media caption.
-
-Maximum upload size:
+Maximum upload:
 
 ```env
 DASHBOARD_MAX_UPLOAD_MB=20
 ```
 
-A successful Human Admin response is stored with:
+Untuk text + file, text digunakan sebagai WhatsApp media caption. Current code membatasi caption file hingga 1024 characters.
+
+Successful human reply disimpan sebagai:
 
 ```text
 role = human_admin
 ```
 
-It can also resolve the relevant notification and cancel the pending automated follow-up.
+Human handling juga dapat resolve notification terkait dan cancel pending automated follow-up.
 
 ---
 
-# 20. Repository Structure
+# 21. WhatsApp / Meta Cloud API
+
+`whatsapp.py` menangani outbound WhatsApp delivery, termasuk text, upload local media ke Meta, dan send media menggunakan media ID.
+
+Current Meta development settings menggunakan:
+
+```env
+WHATSAPP_PHONE_NUMBER_ID=1408846128968304
+WHATSAPP_GRAPH_API_VERSION=v26.0
+```
+
+Webhook callback development:
+
+```text
+https://moneyless-stroller-mounted.ngrok-free.dev/webhook
+```
+
+Meta Developer App harus subscribe ke WhatsApp `messages` webhook events.
+
+Jika ngrok URL berubah, update Meta callback URL.
+
+---
+
+# 22. Repository Structure
 
 ```text
 wa-ai-admin/
 ├── main.py
 ├── classifier.py
-├── state_parser.py
+├── state_extractor.py
 ├── response_generator.py
-├── usage_store.py
-├── whatsapp.py
-├── message_buffer.py
-├── acknowledgement.py
+├── conversation_flow.py
 │
 ├── conversation.py
 ├── lead_store.py
 ├── question_state.py
-├── conversation_flow.py
+├── message_buffer.py
 ├── followup_scheduler.py
 ├── notification_store.py
+├── usage_store.py
+│
+├── whatsapp.py
+├── acknowledgement.py
+├── business_links.py
+├── knowledge_loader.py
+├── style_loader.py
 │
 ├── lead_extractor.py          # legacy/reference
 ├── flow_analyzer.py           # legacy/reference
-│
-├── knowledge_loader.py
-├── style_loader.py
-├── business_links.py
 │
 ├── knowledge/
 │   ├── general.md
@@ -724,6 +916,14 @@ wa-ai-admin/
 │   ├── b2b_corporate.md
 │   └── neutral.md
 │
+├── B2C Document/
+│   ├── Infografis AI Intensitve Bootcamp.jpg
+│   ├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
+│   └── QRIS Transfer Pembayaran Indonesia AI.jpg
+│
+├── B2B Document/
+│   └── Proposal Penawaran AI Corporate Training.pdf
+│
 ├── dashboard/
 │   ├── app.py
 │   ├── dashboard_store.py
@@ -734,16 +934,9 @@ wa-ai-admin/
 │       ├── dashboard.html
 │       └── lead.html
 │
-├── B2B Document/
-│   ├── Infografis AI Intensitve Bootcamp.jpg
-│   ├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
-│   └── QRIS Transfer Pembayaran Indonesia AI.jpg
-│
-├── B2C Document/
-│   └── Proposal Penawaran AI Corporate Training.pdf
-│
 ├── data/
-│   └── conversations.db       # generated/used locally
+│   ├── .gitkeep
+│   └── conversations.db       # runtime; ignored by Git
 │
 ├── inspect_api_usage.py
 ├── inspect_buffer.py
@@ -754,17 +947,19 @@ wa-ai-admin/
 ├── inspect_state.py
 ├── reset_test_lead.py
 ├── seed_dummy_leads.py
-├── apply_dashboard_icons.py
 │
 ├── requirements.txt
-├── .env                       # local secret; do not commit
+├── .env.example
+├── .env                       # local only; do not commit
 ├── .gitignore
 └── README.md
 ```
 
+`state_parser.py` tidak ada dalam current repository karena local state parser sudah dihapus dari active architecture.
+
 ---
 
-# 21. Development / Inspection Utilities
+# 23. Development Utilities
 
 Inspect leads:
 
@@ -772,13 +967,13 @@ Inspect leads:
 python inspect_leads.py
 ```
 
-Inspect conversation memory:
+Inspect memory:
 
 ```bash
 python inspect_memory.py
 ```
 
-Inspect state, flow, follow-ups, and buffer:
+Inspect state/flow/follow-up/buffer:
 
 ```bash
 python inspect_state.py
@@ -787,19 +982,19 @@ python inspect_followups.py
 python inspect_buffer.py
 ```
 
-Inspect OpenAI usage for one lead:
+Inspect OpenAI usage:
 
 ```bash
 python inspect_api_usage.py 628xxxxxxxxxx
 ```
 
-Reset one test lead completely:
+Reset one test lead:
 
 ```bash
 python reset_test_lead.py 628xxxxxxxxxx
 ```
 
-The current reset utility clears that sender's conversation history, lead profile, question/program flow state, notifications, buffers/reply batches, follow-ups, and API telemetry when the relevant tables exist. This is useful for repeatable B2C/B2B tests from message #1.
+Reset utility digunakan untuk repeatable end-to-end test dari conversation awal dan membersihkan data sender terkait pada table yang didukung utility tersebut, termasuk API telemetry.
 
 Seed dummy dashboard data:
 
@@ -807,89 +1002,129 @@ Seed dummy dashboard data:
 python seed_dummy_leads.py
 ```
 
-Do not run the dummy seeder against a production database.
+Jangan gunakan dummy seeder pada production database.
 
 ---
 
-# 22. Testing Milestone 6 Cost Optimization
+# 24. Recommended End-to-End Tests
 
-For a clean cost/quality experiment:
+Setelah perubahan besar, minimal test jalur berikut.
 
-```bash
-python reset_test_lead.py 628xxxxxxxxxx
-```
-
-Run one complete B2C or B2B conversation, then inspect:
-
-```bash
-python inspect_api_usage.py 628xxxxxxxxxx
-```
-
-For Luna vs Sol A/B testing, keep the conversation scenario approximately the same and change only:
-
-```env
-OPENAI_MODEL=gpt-5.6-luna
-```
-
-or:
-
-```env
-OPENAI_MODEL=gpt-5.6
-```
-
-Restart Uvicorn after changing the model. Compare:
+## B2C
 
 ```text
-conversation quality
-API call count
-input tokens
-cached input tokens
-cache-write tokens
-output tokens
-estimated cost
+1. Ask about AI Intensive Bootcamp
+2. Verify infographic is sent from B2C Document/
+3. Select ML/CV/NLP
+4. Ask curriculum/material/dashboard questions
+5. State registration intent
+6. Confirm class + quantity
+7. Verify procedure PDF + QRIS are both sent
+8. Ask "kirim ulang QRIS"
+9. Ask generic "kirim ulang" after registration docs
+10. Claim payment, including typo-heavy wording
+11. Verify STATE EXTRACTOR returns payment_claimed=true
+12. Verify REGISTRATION_PAYMENT_CONFIRMATION exists
+13. Verify Human Reply becomes available
+14. Send human text/file reply
 ```
 
-Do not change parser logic, prompt structure, and model simultaneously if the goal is to measure the contribution of one optimization.
-
----
-
-# 23. Meta Webhook Configuration
-
-Current development callback:
+## B2B
 
 ```text
-https://moneyless-stroller-mounted.ngrok-free.dev/webhook
+1. Ask about AI Corporate Training
+2. Provide name/company/division
+3. Provide participant estimate
+4. Choose online/onsite/hybrid
+5. Provide training goal
+6. Verify proposal PDF is sent from B2B Document/
+7. Ask to resend proposal
+8. Request Quick Call/Meeting
+9. Verify notification/human handling behavior
 ```
-
-The verify token configured in Meta must match:
-
-```env
-WHATSAPP_VERIFY_TOKEN=...
-```
-
-Subscribe the WhatsApp webhook to the relevant `messages` field/events.
-
-If the ngrok domain changes, update both the ngrok command and Meta callback configuration.
 
 ---
 
-# 24. Database
+# 25. Troubleshooting
 
-Current MVP database:
+## Media file not found
+
+Example:
+
+```text
+Media file tidak ditemukan: .../B2B Document/Infografis ...
+```
+
+Bootcamp files must be under `B2C Document/`. Corporate proposal must be under `B2B Document/`.
+
+Check:
+
+```bash
+find "B2B Document" "B2C Document" -maxdepth 1 -type f -print
+```
+
+And verify mapping:
+
+```bash
+grep -n -A8 'MEDIA = {' main.py
+```
+
+## Human Reply remains locked after payment
+
+Check terminal state extraction. Expected:
+
+```text
+STATE EXTRACTOR : API CALL {... 'signals': {'payment_claimed': True}}
+```
+
+Then inspect notification:
+
+```bash
+python - <<'PY'
+from notification_store import open_notifications_for_sender
+print(open_notifications_for_sender("628xxxxxxxxxx"))
+PY
+```
+
+It should contain an open `REGISTRATION_PAYMENT_CONFIRMATION` notification.
+
+## Meta 401 / code 190
+
+This is normally Meta access-token authentication. Replace/refresh `WHATSAPP_ACCESS_TOKEN` and restart the service.
+
+## Code changed but behavior remains old
+
+If Uvicorn is running without `--reload`, stop and restart it:
+
+```bash
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+## Check which module Python is loading
+
+```bash
+python -c "import main; print(main.__file__)"
+```
+
+---
+
+# 26. Database
+
+Current database:
 
 ```text
 data/conversations.db
 ```
 
-The FastAPI service and dashboard share this SQLite database.
+FastAPI and Flask dashboard share this SQLite database.
 
-It contains customer-related information such as conversations, WhatsApp sender identifiers, lead fields, state, follow-ups, notifications, and API usage. Do not commit or publish a live database.
+It can contain customer messages, WhatsApp sender identifiers, lead information, flow state, follow-ups, notifications, and API telemetry. Never commit or publish a live database.
 
-SQLite is suitable for the current local/MVP workflow. A production deployment can later evaluate PostgreSQL or another managed database depending on concurrency, backup, operations, and deployment requirements.
+SQLite is appropriate for the current local/MVP workflow. Production deployment may later move to PostgreSQL or another managed database depending on concurrency, backup, availability, and operational requirements.
 
 ---
 
-# 25. Security and Production Notes
+# 27. Security
 
 Never commit or publish:
 
@@ -898,139 +1133,168 @@ Never commit or publish:
 OPENAI_API_KEY
 WHATSAPP_ACCESS_TOKEN
 WHATSAPP_VERIFY_TOKEN
-live customer database
-private customer data/documents
+live conversations.db
+customer private data/documents
 ```
 
-Before production deployment, review at minimum:
+Before production deployment, review at least:
 
-- Dashboard authentication and authorization.
-- HTTPS and network exposure.
-- Meta System User / durable access-token management.
-- Secret management and rotation.
-- Database backup and recovery.
-- Customer-data retention/deletion policy.
-- Structured logging and monitoring.
-- WhatsApp send retry/idempotency.
-- Upload validation and malware/security controls.
-- Rate limits and operational alerting.
-- Database/concurrency strategy.
+```text
+Dashboard authentication + authorization
+HTTPS/network exposure
+Meta durable/System User token management
+secret storage and rotation
+database backup/recovery
+customer-data retention/deletion
+structured logging/monitoring
+WhatsApp retry/idempotency
+upload validation/security
+rate limits
+production database/concurrency strategy
+```
 
-The current dashboard should be considered an internal development/admin interface, not a public production application.
+The current dashboard is an internal development/admin interface, not a public production application.
 
 ---
 
-# 26. Development Progress
+# 28. Git / GitHub
+
+`.gitignore` should keep secrets/runtime data outside Git:
+
+```text
+.env
+__pycache__/
+.venv/
+venv/
+.DS_Store
+data/*.db
+data/*.db-shm
+data/*.db-wal
+```
+
+Typical update workflow:
+
+```bash
+git status
+git add .
+git commit -m "Update WhatsApp AI Admin"
+git push
+```
+
+Always inspect `git status` before committing to make sure `.env`, live database files, or other secrets are not staged.
+
+---
+
+# 29. Development Progress
 
 | Stage | Capability | Status |
 |---|---|---|
 | Milestone 1 | Meta WhatsApp inbound webhook | ✅ |
-| Milestone 2 | LLM classification + WhatsApp AI reply | ✅ |
+| Milestone 2 | Semantic classification + AI WhatsApp reply | ✅ |
 | Milestone 3A | Multi-turn conversation memory | ✅ |
 | Milestone 3B | Grounded Indonesia AI knowledge | ✅ |
 | Milestone 4A | Persistent SQLite memory | ✅ |
 | Milestone 4B | Structured lead profile | ✅ |
 | Milestone 4C | Conversation/question state | ✅ |
-| Milestone 4D/4E | B2C/B2B guided flow + media | ✅ |
+| Milestone 4D/4E | B2C/B2B guided flow + automatic media | ✅ |
 | Milestone 4E.4 | Persistent inactivity follow-up | ✅ |
 | Milestone 5 | Dashboard + admin notifications | ✅ |
 | Human Handling | Dashboard human replies | ✅ |
 | Human Media | PDF/JPG/PNG upload from dashboard | ✅ |
-| Milestone 6.1 | Periodic classification + local parser + single fallback | ✅ |
+| Milestone 6 | API cost optimization | ✅ |
 | Milestone 6A | Per-lead token/cost telemetry | ✅ |
 | Milestone 6B | Cache-friendly response generator | ✅ |
-| Milestone 6C | Configurable GPT-5.6 Luna default | ✅ |
-| Production hardening | Auth, durable deployment, monitoring, stronger retries, etc. | Planned |
+| Milestone 6C | Configurable model experiment / Luna phase | Completed experiment |
+| Current | GPT-5.6 + semantic state extractor every inbound turn | ✅ Active |
+| Current | Local regex `state_parser.py` removed | ✅ |
+| Current | Correct B2C/B2B document mapping + media resend | ✅ |
+| Current | Payment notification → Human Reply handoff | ✅ |
+| Production hardening | Auth, durable deployment, monitoring, retries, etc. | Planned |
 
 ---
 
-# 27. Current Technology Stack
-
-- Python
-- FastAPI
-- Uvicorn
-- Flask
-- SQLite
-- OpenAI API
-- GPT-5.6 Luna by default for the active Milestone 6 pipeline
-- Meta WhatsApp Business Platform / Cloud API
-- ngrok
-- HTML / CSS / Jinja
-- Markdown knowledge/style files
-
----
-
-# 28. Current End-to-End Flow
+# 30. Current Technology Stack
 
 ```text
-Customer sends WhatsApp message
-        ↓
-Meta webhook event
-        ↓
-Message buffer/debounce
-        ↓
-Load recent history + persistent lead/state
-        ↓
-Classify only when needed / every 10th user message
-        ↓
-Local state-aware parsing
-        ↓
-Single LLM state fallback only when necessary
-        ↓
-Update lead + deterministic program flow
-        ↓
-Load controlled knowledge/style/links
-        ↓
-Cache-friendly GPT response generation
-        ↓
-Record per-lead API tokens/cost
-        ↓
-Send text / links / documents / images through Meta
-        ↓
-Persist conversation/state
-        ↓
-Schedule/cancel follow-up as applicable
-        ↓
-Create admin notification when human action is needed
-        ↓
-Human Admin can respond from dashboard
-        ↓
-Human text/file sent through Meta and stored in history
+Python
+FastAPI
+Uvicorn
+Flask
+SQLite
+OpenAI API
+GPT-5.6 (current default)
+Meta WhatsApp Business Platform / Cloud API
+ngrok
+HTML / CSS / Jinja
+Markdown business knowledge/style files
 ```
 
 ---
 
-# 29. Business Scope
+# 31. Current End-to-End Flow
 
-## AI Intensive Bootcamp — B2C
-
-For individual learners interested in Indonesia AI's intensive specialist programs, currently represented in the flow by ML, CV, and NLP tracks.
-
-## AI Corporate Training — B2B
-
-For companies, institutions, organizations, and teams requiring AI training tailored to participant profile, delivery preference, and business/training goals.
-
-Business facts should remain grounded in controlled Indonesia AI knowledge rather than invented by the model.
+```text
+Customer sends WhatsApp message
+        ↓
+Meta webhook
+        ↓
+Buffer consecutive customer bubbles
+        ↓
+Load history + persistent lead/flow
+        ↓
+Classify product if unknown or every 10th inbound message
+        ↓
+Semantic state extraction (LLM every inbound turn)
+        ↓
+Update structured lead + flow state
+        ↓
+Deterministic B2C/B2B flow planning
+        ↓
+Determine required media / links / notifications
+        ↓
+Load grounded knowledge + style
+        ↓
+Cache-friendly natural response generation
+        ↓
+Record API tokens + estimated cost
+        ↓
+Send text / PDF / image through Meta
+        ↓
+Persist conversation
+        ↓
+Schedule/cancel follow-up
+        ↓
+Create human-action notification when required
+        ↓
+Human Admin can reply when notification is open
+        ↓
+Human reply is sent through Meta and stored in history
+```
 
 ---
 
-# 30. Recommended Next Priorities
+# 32. Current Design Decision
 
-The current system is already a functional AI-admin MVP. The next priorities are primarily measurement, reliability, and production hardening:
+The current implementation intentionally accepts **one semantic state-extraction API call per inbound customer turn** rather than relying on a cheaper regex parser.
 
-1. Run controlled Luna vs Sol quality/cost comparisons using the telemetry already implemented.
-2. Measure prompt-cache hit behavior and optimize the stable prefix only if telemetry justifies it.
-3. Add dashboard authentication before any public deployment.
-4. Use a durable Meta access-token strategy for continuous operation.
-5. Improve outbound WhatsApp retry/idempotency and error recovery.
-6. Add production monitoring and structured logs.
-7. Review file-upload security and customer-data retention.
-8. Evaluate managed deployment/database options when moving beyond local/MVP usage.
+This is a quality/reliability trade-off:
 
----
+```text
+Old approach:
+local parser first → cheaper, but fragile to WhatsApp language variation
 
-# Maintainer
+Current approach:
+semantic state extractor every inbound → higher API usage, more robust understanding
+```
 
-**Indonesia AI**
+Cost optimization is still retained through:
 
-Website: `https://aiforindonesia.com/`
+```text
+periodic product classification
+prompt caching in response_generator.py
+persistent state/history
+controlled deterministic flow
+per-lead telemetry
+```
+
+The goal is not to minimize API calls at all costs, but to keep the AI Admin reliable enough for real customer conversations while retaining measurable cost controls.
