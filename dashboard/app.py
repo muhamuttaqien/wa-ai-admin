@@ -226,3 +226,4 @@ def notification_status(notification_id):
 
 if __name__ == "__main__":
     app.run(host=HOST, port=PORT, debug=False)
+    
