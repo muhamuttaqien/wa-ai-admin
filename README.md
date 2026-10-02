@@ -955,8 +955,6 @@ wa-ai-admin/
 └── README.md
 ```
 
-`state_parser.py` tidak ada dalam current repository karena local state parser sudah dihapus dari active architecture.
-
 ---
 
 # 23. Development Utilities
