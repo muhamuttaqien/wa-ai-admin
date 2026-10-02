@@ -88,7 +88,13 @@
       </form>
     </div>
     {% else %}
-    <div class="human-reply-locked"><i class="fa-solid fa-lock" aria-hidden="true"></i><span>Human reply hanya tersedia ketika ada notifikasi aktif untuk lead ini.</span></div>
+    <div class="human-reply-locked">
+      <i class="fa-solid fa-lock" aria-hidden="true"></i>
+      <span>Human reply hanya tersedia ketika ada notifikasi aktif untuk lead ini.</span>
+      <form method="post" action="{{ url_for('activate_human_handling', sender=lead.sender) }}" style="display:inline; margin-left:10px;">
+        <button class="button" type="submit">Aktifkan sekarang</span></button>
+      </form>
+    </div>
     {% endif %}
   </section>
 </div>

@@ -13,7 +13,7 @@ load_dotenv(ROOT / ".env")
 
 from dashboard.dashboard_store import leads, lead, conversation, followup, summary, api_usage
 from notification_store import (list_notifications, notification_counts, update_notification_status,
-                                open_notifications_for_sender, get_notification)
+                                open_notifications_for_sender, get_notification, create_notification)
 from conversation import add_message
 from whatsapp import send_text_message, send_media_message
 from followup_scheduler import cancel_followup
@@ -162,6 +162,24 @@ def lead_detail(sender):
     )
 
 
+@app.post("/lead/<sender>/human-handling/activate")
+def activate_human_handling(sender):
+    item = lead(sender)
+    if not item:
+        abort(404)
+
+    channel = "B2C" if item.get("product_interest") == "AI Intensive Bootcamp" else "B2B"
+    create_notification(
+        sender=sender,
+        channel=channel,
+        notification_type="MANUAL_HUMAN_HANDLING",
+        title="Human handling diaktifkan manual",
+        message="Human reply diaktifkan secara manual dari dashboard.",
+        dedupe_open=True,
+    )
+    return redirect(url_for("lead_detail", sender=sender))
+
+
 @app.post("/lead/<sender>/reply")
 def human_reply(sender):
     item = lead(sender)
@@ -226,4 +244,3 @@ def notification_status(notification_id):
 
 if __name__ == "__main__":
     app.run(host=HOST, port=PORT, debug=False)
-    
