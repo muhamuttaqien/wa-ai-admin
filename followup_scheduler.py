@@ -11,7 +11,12 @@ B2C_POST_HOURS = float(os.getenv("B2C_POST_REGISTRATION_FOLLOWUP_HOURS", "12"))
 
 B2B_ENABLED = os.getenv("B2B_FOLLOWUP_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
 B2B_PRE_HOURS = float(os.getenv("B2B_PRE_PROPOSAL_FOLLOWUP_HOURS", "3"))
-B2B_POST_HOURS = float(os.getenv("B2B_POST_PROPOSAL_FOLLOWUP_HOURS", "24"))
+B2B_POST_HOURS = float(os.getenv("B2B_POST_PROPOSAL_FOLLOWUP_HOURS", "12"))
+
+# Hard safety margin for WhatsApp free-form follow-ups. The official customer
+# service window is 24 hours after the latest inbound customer message. We use
+# 23.5 hours so scheduler/polling/network delays cannot push a send over 24h.
+WHATSAPP_FREEFORM_MAX_AGE_HOURS = 23.5
 
 for name, value in {
     "B2C_PRE_REGISTRATION_FOLLOWUP_HOURS": B2C_PRE_HOURS,
@@ -31,6 +36,13 @@ KINDS = {B2C_PRE, B2C_POST, B2B_PRE, B2B_POST}
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _parse_utc(value: str):
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def init_followup_db():
@@ -145,19 +157,63 @@ def schedule_for_b2b_state(sender: str, lead: dict, flow: dict):
 
 
 def due_followups(limit: int = 20):
+    """Return only due follow-ups that are safely inside WhatsApp's 24h window.
+
+    Any due follow-up whose latest stored inbound customer message is missing or
+    already >= 23.5 hours old is deleted instead of being returned to main.py.
+    This makes the safety check fail closed: process_due_followups() can only
+    receive free-form follow-ups that are still safely inside the window.
+    """
     if not (B2C_ENABLED or B2B_ENABLED):
         return []
-    now = _now().isoformat()
+
+    now = _now()
+    now_iso = now.isoformat()
+    safe = []
+
     with _lock:
         with _connect() as conn:
             rows = conn.execute("""
-                SELECT sender, kind, due_at
-                FROM followups
-                WHERE sent_at IS NULL AND due_at <= ?
-                ORDER BY due_at ASC
+                SELECT
+                    f.sender,
+                    f.kind,
+                    f.due_at,
+                    (
+                        SELECT cm.created_at
+                        FROM conversation_messages AS cm
+                        WHERE cm.sender = f.sender AND cm.role = 'user'
+                        ORDER BY cm.id DESC
+                        LIMIT 1
+                    ) AS last_user_at
+                FROM followups AS f
+                WHERE f.sent_at IS NULL AND f.due_at <= ?
+                ORDER BY f.due_at ASC
                 LIMIT ?
-            """, (now, limit)).fetchall()
-    return [dict(r) for r in rows]
+            """, (now_iso, limit)).fetchall()
+
+            for row in rows:
+                last_user_at = row["last_user_at"]
+                if not last_user_at:
+                    conn.execute("DELETE FROM followups WHERE sender=?", (row["sender"],))
+                    print(f"FOLLOW-UP BLOCKED : {row['sender']} [{row['kind']}] no inbound customer timestamp")
+                    continue
+
+                age_hours = (now - _parse_utc(last_user_at)).total_seconds() / 3600.0
+                if age_hours >= WHATSAPP_FREEFORM_MAX_AGE_HOURS:
+                    conn.execute("DELETE FROM followups WHERE sender=?", (row["sender"],))
+                    print(
+                        f"FOLLOW-UP BLOCKED : {row['sender']} [{row['kind']}] "
+                        f"last customer message {age_hours:.2f}h ago"
+                    )
+                    continue
+
+                safe.append({
+                    "sender": row["sender"],
+                    "kind": row["kind"],
+                    "due_at": row["due_at"],
+                })
+
+    return safe
 
 
 def mark_followup_sent(sender: str):

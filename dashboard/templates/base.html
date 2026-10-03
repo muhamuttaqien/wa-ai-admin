@@ -14,8 +14,18 @@
     <div class="subtitle">WhatsApp AI Admin Dashboard</div>
   </div>
   <nav>
-    <a class="{{ 'active' if channel=='B2C' else '' }}" href="{{ url_for('b2c') }}"><i class="fa-solid fa-user" aria-hidden="true"></i><span>Admin B2C</span></a>
-    <a class="{{ 'active' if channel=='B2B' else '' }}" href="{{ url_for('b2b') }}"><i class="fa-solid fa-building" aria-hidden="true"></i><span>Admin B2B</span></a>
+    <a class="{{ 'active' if channel=='B2C' else '' }}" href="{{ url_for('b2c') }}">
+      <i class="fa-solid fa-user" aria-hidden="true"></i><span>Admin B2C</span>
+    </a>
+    <a class="{{ 'active' if channel=='B2B' else '' }}" href="{{ url_for('b2b') }}">
+      <i class="fa-solid fa-building" aria-hidden="true"></i><span>Admin B2B</span>
+    </a>
+    <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+      <button class="logout-button" type="submit" title="Logout">
+        <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+        <span>Logout</span>
+      </button>
+    </form>
   </nav>
 </header>
 <main>{% block content %}{% endblock %}</main>

@@ -1,7 +1,9 @@
 import os, sys
+import hmac
 import tempfile
+from functools import wraps
 from pathlib import Path
-from flask import Flask, render_template, redirect, request, url_for, abort
+from flask import Flask, render_template, redirect, request, url_for, abort, session
 from werkzeug.utils import secure_filename
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,12 +23,73 @@ from followup_scheduler import cancel_followup
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("DASHBOARD_MAX_UPLOAD_MB", "20")) * 1024 * 1024
 
+# Dashboard login/session configuration.
+# Keep these values in .env only; never commit credentials to Git.
+app.secret_key = os.getenv("DASHBOARD_SECRET_KEY", "")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("DASHBOARD_COOKIE_SECURE", "true").strip().lower() in {"1", "true", "yes", "on"},
+)
+
+DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+if not app.secret_key:
+    raise RuntimeError("DASHBOARD_SECRET_KEY is required. Set it in .env.")
+if not DASHBOARD_USERNAME or not DASHBOARD_PASSWORD:
+    raise RuntimeError("DASHBOARD_USERNAME and DASHBOARD_PASSWORD are required. Set them in .env.")
+
 ALLOWED_HUMAN_UPLOADS = {
     ".pdf": ("document", "application/pdf"),
     ".jpg": ("image", "image/jpeg"),
     ".jpeg": ("image", "image/jpeg"),
     ".png": ("image", "image/png"),
 }
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("dashboard_authenticated"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("dashboard_authenticated"):
+        return redirect(url_for("home"))
+
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+
+        username_ok = hmac.compare_digest(username, DASHBOARD_USERNAME)
+        password_ok = hmac.compare_digest(password, DASHBOARD_PASSWORD)
+
+        if username_ok and password_ok:
+            session.clear()
+            session["dashboard_authenticated"] = True
+            session["dashboard_username"] = DASHBOARD_USERNAME
+
+            next_url = request.args.get("next", "")
+            if not next_url.startswith("/") or next_url.startswith("//"):
+                next_url = url_for("home")
+            return redirect(next_url)
+
+        error = "Username atau password salah."
+
+    return render_template("login.html", error=error)
+
+
+@app.post("/logout")
+@login_required
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.template_filter("usd_to_idr")
@@ -50,11 +113,8 @@ def format_wib(value):
 
     try:
         dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-
-        # Treat naive timestamps as UTC for backward compatibility.
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-
         dt_wib = dt.astimezone(ZoneInfo("Asia/Jakarta"))
 
         months = {
@@ -62,18 +122,20 @@ def format_wib(value):
             5: "Mei", 6: "Jun", 7: "Jul", 8: "Agu",
             9: "Sep", 10: "Okt", 11: "Nov", 12: "Des",
         }
-
         return f"{dt_wib.day} {months[dt_wib.month]} {dt_wib.year}, {dt_wib:%H:%M} WIB"
-
     except (ValueError, TypeError):
         return str(value)
+
 
 HOST = os.getenv("DASHBOARD_HOST", "127.0.0.1")
 PORT = int(os.getenv("DASHBOARD_PORT", "1008"))
 
+
 @app.get("/")
+@login_required
 def home():
     return redirect(url_for("b2c"))
+
 
 def _page(channel):
     all_leads = leads(channel)
@@ -137,15 +199,21 @@ def _page(channel):
         summary=summary(channel),
     )
 
+
 @app.get("/b2c")
+@login_required
 def b2c():
     return _page("B2C")
 
+
 @app.get("/b2b")
+@login_required
 def b2b():
     return _page("B2B")
 
+
 @app.get("/lead/<sender>")
+@login_required
 def lead_detail(sender):
     item = lead(sender)
     if not item:
@@ -163,6 +231,7 @@ def lead_detail(sender):
 
 
 @app.post("/lead/<sender>/human-handling/activate")
+@login_required
 def activate_human_handling(sender):
     item = lead(sender)
     if not item:
@@ -181,6 +250,7 @@ def activate_human_handling(sender):
 
 
 @app.post("/lead/<sender>/reply")
+@login_required
 def human_reply(sender):
     item = lead(sender)
     if not item:
@@ -203,8 +273,6 @@ def human_reply(sender):
     ):
         abort(403)
 
-    # Only notification-triggered cases may be answered by a human admin.
-    # Resolve only after Meta accepts the outbound message/file.
     if has_file:
         filename = secure_filename(upload.filename)
         ext = Path(filename).suffix.lower()
@@ -212,7 +280,6 @@ def human_reply(sender):
             abort(415, description="Format file tidak didukung. Gunakan PDF, JPG, JPEG, atau PNG.")
 
         media_type, mime_type = ALLOWED_HUMAN_UPLOADS[ext]
-        # Never trust the browser-provided MIME type; determine it from the allow-listed extension.
         with tempfile.TemporaryDirectory(prefix="wa-admin-upload-") as tmpdir:
             file_path = Path(tmpdir) / filename
             upload.save(file_path)
@@ -236,11 +303,14 @@ def human_reply(sender):
     update_notification_status(notification_id, "resolved")
     return redirect(url_for("lead_detail", sender=sender))
 
+
 @app.post("/notification/<int:notification_id>/status")
+@login_required
 def notification_status(notification_id):
     status = request.form.get("status", "")
     update_notification_status(notification_id, status)
     return redirect(request.referrer or url_for("home"))
+
 
 if __name__ == "__main__":
     app.run(host=HOST, port=PORT, debug=False)

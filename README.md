@@ -138,7 +138,7 @@ B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
 # ============================================================
 B2B_FOLLOWUP_ENABLED=true
 B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
-B2B_POST_PROPOSAL_FOLLOWUP_HOURS=24
+B2B_POST_PROPOSAL_FOLLOWUP_HOURS=12
 
 # ============================================================
 # ADMIN DASHBOARD
@@ -690,7 +690,7 @@ Default schedule:
 B2C pre-registration    3 hours
 B2C post-registration  12 hours
 B2B pre-proposal        3 hours
-B2B post-proposal       24 hours
+B2B post-proposal      12 hours
 ```
 
 Config:
@@ -702,7 +702,7 @@ B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
 
 B2B_FOLLOWUP_ENABLED=true
 B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
-B2B_POST_PROPOSAL_FOLLOWUP_HOURS=24
+B2B_POST_PROPOSAL_FOLLOWUP_HOURS=12
 ```
 
 Inbound customer activity dan human handling dapat membatalkan/reset follow-up yang relevan.

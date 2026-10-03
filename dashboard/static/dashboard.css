@@ -187,3 +187,40 @@ nav a.nav-refresh:active {
 .api-usage dl{grid-template-columns:145px 1fr}
 .api-cost{color:var(--success);font-weight:700}
 .api-breakdown{display:flex;flex-direction:column;gap:4px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+
+/* Elegant logout navigation */
+.logout-form {
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.logout-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #b6aaaa;
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.18s ease, background 0.18s ease;
+}
+
+.logout-button i {
+    width: 1em;
+    text-align: center;
+    color: var(--muted);
+}
+
+.logout-button:hover {
+    background: #261b1b;
+    color: #ffffff;
+}
+
+.logout-button:hover i {
+    color: var(--accent);
+}
