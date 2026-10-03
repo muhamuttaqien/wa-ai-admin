@@ -28,10 +28,50 @@ _worker_stop = threading.Event()
 ROOT = Path(__file__).resolve().parent
 
 MEDIA = {
-    "bootcamp_infographic": (ROOT / "B2C Document" / "Infografis AI Intensitve Bootcamp.jpg", "image"),
-    "bootcamp_registration_doc": (ROOT / "B2C Document" / "Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf", "document"),
-    "bootcamp_qris": (ROOT / "B2C Document" / "QRIS Transfer Pembayaran Indonesia AI.jpg", "image"),
-    "corporate_proposal": (ROOT / "B2B Document" / "Proposal Penawaran AI Corporate Training.pdf", "document"),
+    "bootcamp_brochure": (ROOT / "B2C Document" / "AI Intensive Bootcamp.pdf", "document"),
+
+    # Historical flow key retained: conversation_flow.py stays unchanged.
+    # The automatic B2C overview now uses the Red infographic.
+    "bootcamp_infographic": (
+        ROOT / "B2C Document" / "Infografis AI Intensive Bootcamp (Red).jpg",
+        "image",
+    ),
+    "bootcamp_infographic_red": (
+        ROOT / "B2C Document" / "Infografis AI Intensive Bootcamp (Red).jpg",
+        "image",
+    ),
+    "bootcamp_infographic_white": (
+        ROOT / "B2C Document" / "Infografis AI Intensive Bootcamp (White).jpg",
+        "image",
+    ),
+    "learning_dashboard": (ROOT / "B2C Document" / "Dashboard Belajar.png", "image"),
+    "bootcamp_registration_doc": (
+        ROOT / "B2C Document" / "Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf",
+        "document",
+    ),
+    "bootcamp_qris": (
+        ROOT / "B2C Document" / "QRIS Transfer Pembayaran Indonesia AI.jpg",
+        "image",
+    ),
+    "payment_due_date": (ROOT / "B2C Document" / "Tanggal Jatuh Tempo.jpg", "image"),
+
+    # Registered for a future campaign scheduler; never auto-selected from normal chat.
+    "last_call_h5": (ROOT / "B2C Document" / "Last Call H-5.png", "image"),
+    "last_call_h3": (ROOT / "B2C Document" / "Last Call H-3.jpg", "image"),
+    "last_call_h1": (ROOT / "B2C Document" / "Last Call H-1.jpg", "image"),
+    "last_call_today": (ROOT / "B2C Document" / "Last Call H.jpg", "image"),
+
+    "corporate_proposal": (
+        ROOT / "B2B Document" / "Proposal Penawaran AI Corporate Training.pdf",
+        "document",
+    ),
+}
+
+MEDIA_BUNDLES = {
+    "bootcamp_registration_bundle": (
+        "bootcamp_registration_doc",
+        "bootcamp_qris",
+    ),
 }
 
 
@@ -47,15 +87,16 @@ def _send_reply_with_optional_media(sender, replies, media_key):
             results.append(send_text_message(sender,text))
         return results
 
-    if media_key == "bootcamp_registration_bundle":
-        # Registration assets first, then close with the natural admin guidance.
-        for key in ("bootcamp_registration_doc", "bootcamp_qris"):
+    if media_key in MEDIA_BUNDLES:
+        # Media routing only. Conversation progression remains controlled by
+        # conversation_flow.py and the existing flow flags.
+        for key in MEDIA_BUNDLES[media_key]:
             path, media_type = MEDIA[key]
             if not path.exists():
                 raise RuntimeError(f"Media file tidak ditemukan: {path}")
-            results.append(send_media_message(sender,str(path),media_type))
+            results.append(send_media_message(sender, str(path), media_type))
         for text in replies:
-            results.append(send_text_message(sender,text))
+            results.append(send_text_message(sender, text))
         return results
 
     # Other assets: first explanatory bubble, asset, then remaining bubble(s).

@@ -50,7 +50,20 @@ signals boleh berisi:
 - registration_confirmed (true)
 - payment_claimed (true)
 - meeting_request (Quick Call/Quick Meeting)
-- media_request (bootcamp_infographic/bootcamp_registration_doc/bootcamp_qris/bootcamp_registration_bundle/corporate_proposal)
+- media_request, salah satu dari:
+  bootcamp_brochure
+  bootcamp_infographic
+  bootcamp_infographic_red
+  bootcamp_infographic_white
+  learning_dashboard
+  bootcamp_registration_doc
+  bootcamp_qris
+  payment_due_date
+  bootcamp_registration_bundle
+  corporate_proposal
+
+Catatan: last_call_h5/last_call_h3/last_call_h1/last_call_today adalah aset campaign internal.
+Jangan pilih aset Last Call dari percakapan pelanggan biasa.
 
 Aturan penting:
 - Pahami typo/singkatan secara semantik. Contoh "sudah saa trannnsfer", "udh tf", atau "barusan bayar" dapat berarti payment_claimed=true bila konteks jelas.
@@ -60,8 +73,14 @@ Aturan penting:
 - Jika pelanggan mengonfirmasi pertanyaan Admin tentang pendaftaran/jumlah, gunakan riwayat untuk menentukan registration_confirmed dan quantity bila jelas.
 - Jika pelanggan meminta media/dokumen dikirim atau dikirim ulang, isi media_request secara semantik meskipun ada typo, singkatan, atau susunan kalimat bebas.
 - Contoh: "kirimin lagi infografiis sebelumnya" -> media_request="bootcamp_infographic".
+- "ada brosur lengkapnya?" atau "kirim pdf programnya" -> media_request="bootcamp_brochure".
+- "kirim infografis merah" -> media_request="bootcamp_infographic_red".
+- "yang versi putih ada?" -> media_request="bootcamp_infographic_white".
+- "dashboard belajarnya seperti apa?" atau "kirim gambar dashboard" -> media_request="learning_dashboard".
 - "kirim QRIS lagi" -> media_request="bootcamp_qris".
 - "kirim prosedur/pdf pendaftaran lagi" -> media_request="bootcamp_registration_doc".
+- "tanggal jatuh temponya gimana?" atau "kirim info jatuh tempo" -> media_request="payment_due_date".
+- Jika pelanggan meminta prosedur pendaftaran DAN QRIS sekaligus -> media_request="bootcamp_registration_bundle".
 - "kirim proposal lagi" -> media_request="corporate_proposal".
 - Untuk permintaan generik seperti "boleh kirim ulang?", gunakan Current flow dan riwayat: bila registration_doc_sent=true pada B2C, media_request="bootcamp_registration_bundle"; bila hanya infographic_sent=true, media_request="bootcamp_infographic"; bila proposal_sent=true pada B2B, media_request="corporate_proposal".
 - Permintaan media ulang tidak boleh mengubah registration/payment/proposal state lain.
@@ -102,9 +121,14 @@ Kembalikan persis dalam bentuk: {{\"lead_updates\":{{}},\"signals\":{{}}}}""",
         sig.pop("meeting_request", None)
     if sig.get("media_request") not in {
         None,
+        "bootcamp_brochure",
         "bootcamp_infographic",
+        "bootcamp_infographic_red",
+        "bootcamp_infographic_white",
+        "learning_dashboard",
         "bootcamp_registration_doc",
         "bootcamp_qris",
+        "payment_due_date",
         "bootcamp_registration_bundle",
         "corporate_proposal",
     }:
