@@ -69,7 +69,7 @@ Dengan `.env.example` saat ini:
 http://127.0.0.1:8080
 ```
 
-Dashboard sebaiknya tetap di `127.0.0.1` selama development karena belum memiliki production-grade authentication.
+Dashboard menggunakan login berbasis session. Selama development, tetap disarankan bind ke `127.0.0.1`. Untuk local HTTP testing, `DASHBOARD_COOKIE_SECURE=false`; ketika dashboard diakses melalui HTTPS, gunakan `DASHBOARD_COOKIE_SECURE=true`.
 
 ---
 
@@ -131,7 +131,13 @@ MAX_BATCH_AGE_SECONDS=45
 # ============================================================
 B2C_FOLLOWUP_ENABLED=true
 B2C_PRE_REGISTRATION_FOLLOWUP_HOURS=3
+B2C_PRE_REGISTRATION_SECOND_FOLLOWUP_HOURS=9
 B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
+
+# Last Call campaign
+B2C_LAST_CALL_ENABLED=true
+B2C_LAST_CALL_DELAY_HOURS=12
+BOOTCAMP_REGISTRATION_DEADLINE=2026-11-01
 
 # ============================================================
 # B2B FOLLOW-UP
@@ -146,6 +152,10 @@ B2B_POST_PROPOSAL_FOLLOWUP_HOURS=12
 DASHBOARD_HOST=127.0.0.1
 DASHBOARD_PORT=8080
 DASHBOARD_MAX_UPLOAD_MB=20
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=
+DASHBOARD_SECRET_KEY=
+DASHBOARD_COOKIE_SECURE=true
 
 # Approximate USD → IDR display rate on dashboard
 USD_TO_IDR_RATE=16500
@@ -390,13 +400,21 @@ REGISTRATION_PAYMENT_CONFIRMATION notification
 Human Reply becomes available
 ```
 
-Current Bootcamp document mapping:
+Current Bootcamp media library:
 
 ```text
 B2C Document/
-├── Infografis AI Intensitve Bootcamp.jpg
-├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
-└── QRIS Transfer Pembayaran Indonesia AI.jpg
+├── AI Intensive Bootcamp.pdf
+├── Dashboard Belajar.png
+├── Infografis AI Intensive Bootcamp (Red).jpg
+├── Infografis AI Intensive Bootcamp (White).jpg
+├── Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf
+├── QRIS Transfer Pembayaran Indonesia AI.jpg
+├── Tanggal Jatuh Tempo.jpg
+├── Last Call H-5.jpg
+├── Last Call H-3.jpg
+├── Last Call H-1.jpg
+└── Last Call H.jpg
 ```
 
 Do not move these Bootcamp assets into `B2B Document/` unless the media mapping in `main.py` is intentionally changed as well.
@@ -438,33 +456,25 @@ B2B Document/
 
 # 9. Automated Media Delivery
 
-`main.py` owns the canonical automated media mapping:
+`main.py` owns the canonical media mapping. Media can be selected by deterministic conversation flow or by semantic `media_request` from `state_extractor.py`.
 
 ```text
-bootcamp_infographic
-→ B2C Document/Infografis AI Intensitve Bootcamp.jpg
-
-bootcamp_registration_doc
-→ B2C Document/Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
-
-bootcamp_qris
-→ B2C Document/QRIS Transfer Pembayaran Indonesia AI.jpg
-
-corporate_proposal
-→ B2B Document/Proposal Penawaran AI Corporate Training.pdf
+bootcamp_brochure          → AI Intensive Bootcamp.pdf
+bootcamp_infographic       → Infografis AI Intensive Bootcamp (Red).jpg
+bootcamp_infographic_red   → Infografis AI Intensive Bootcamp (Red).jpg
+bootcamp_infographic_white → Infografis AI Intensive Bootcamp (White).jpg
+learning_dashboard         → Dashboard Belajar.png
+bootcamp_registration_doc  → Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf
+bootcamp_qris              → QRIS Transfer Pembayaran Indonesia AI.jpg
+payment_due_date           → Tanggal Jatuh Tempo.jpg
+corporate_proposal         → Proposal Penawaran AI Corporate Training.pdf
 ```
 
-For Bootcamp registration, the system sends a bundle in this order:
+`bootcamp_registration_bundle` sends the registration procedure PDF and QRIS together. Last Call assets are reserved for the campaign scheduler and are not selected from ordinary customer chat.
 
-```text
-1. Registration/payment procedure PDF
-2. QRIS image
-3. Natural admin guidance/reply
-```
+Semantic media selection is relevance-based, not limited to explicit requests for a file. For example, a natural question about installments, payment terms, or due dates can produce `media_request=payment_due_date`, so the due-date image accompanies the answer. Resend requests can also select the relevant media without advancing the conversation stage.
 
-For other assets, the normal pattern is explanatory bubble → asset → remaining bubble(s).
-
-If a required file does not exist, `main.py` raises an explicit `Media file tidak ditemukan` error instead of pretending the file was sent.
+For Bootcamp registration, the normal bundle order is procedure PDF → QRIS → natural admin guidance. For ordinary single assets, the delivery pattern is explanatory bubble → asset → remaining bubble(s). Missing required files raise an explicit `Media file tidak ditemukan` error.
 
 ---
 
@@ -518,6 +528,10 @@ DYNAMIC SUFFIX
 Current response call menggunakan explicit prompt caching dengan TTL 30 menit.
 
 Caching tidak membuat reply menjadi statis. Customer message, history, lead state, dan flow stage tetap dinamis. Tujuannya hanya mengurangi biaya pemrosesan stable prompt yang berulang.
+
+Current customer-facing output is constrained to 1–3 WhatsApp bubbles. `_parse_messages()` enforces a hard maximum of three bubbles, while the prompt asks each bubble to stay relatively short. There is currently no character-per-bubble hard cap and no `max_output_tokens` hard limit in the response call, so brevity is primarily prompt-controlled.
+
+Customer-facing style also instructs the admin to speak as Indonesia AI directly rather than sounding like it is quoting a website, and to avoid source-referencing phrases such as “berdasarkan yang tercantum”. Colon punctuation should be avoided in prose; technical URLs remain intact.
 
 ---
 
@@ -655,6 +669,7 @@ Business facts dipisahkan dari LLM behavior dan disimpan di:
 ```text
 knowledge/
 ├── general.md
+├── website_snapshot.md
 ├── corporate_training.md
 └── intensive_bootcamp.md
 ```
@@ -676,28 +691,20 @@ style_loader.py
 business_links.py
 ```
 
+`intensive_bootcamp.md` dan `corporate_training.md` menjadi core curated knowledge yang detail. `website_snapshot.md` menyimpan snapshot terpilih dari halaman resmi sebagai knowledge pelengkap. Current Bootcamp duration adalah 12 minggu / 3 bulan dan wording lama 18 minggu / 4–5 bulan tidak digunakan lagi.
+
 Business facts yang berubah seiring waktu, seperti batch date, price, promotion, schedule, curriculum links, dan registration information harus diperbarui pada controlled knowledge source, bukan dibiarkan ditebak model.
 
 ---
 
 # 17. Follow-up Scheduler
 
-`followup_scheduler.py` mengelola persistent inactivity follow-up.
-
-Default schedule:
-
-```text
-B2C pre-registration    3 hours
-B2C post-registration  12 hours
-B2B pre-proposal        3 hours
-B2B post-proposal      12 hours
-```
-
-Config:
+`followup_scheduler.py` mengelola persistent inactivity follow-up. Normal B2C pre-registration menggunakan dua tahap. Follow-up pertama berjalan 3 jam setelah inbound terakhir. Jika customer tetap tidak membalas, follow-up kedua berjalan 9 jam setelah follow-up pertama, yaitu sekitar 12 jam dari inbound awal, lalu berhenti. Inbound baru membatalkan pending follow-up dan menghitung ulang dari aktivitas customer terbaru.
 
 ```env
 B2C_FOLLOWUP_ENABLED=true
 B2C_PRE_REGISTRATION_FOLLOWUP_HOURS=3
+B2C_PRE_REGISTRATION_SECOND_FOLLOWUP_HOURS=9
 B2C_POST_REGISTRATION_FOLLOWUP_HOURS=12
 
 B2B_FOLLOWUP_ENABLED=true
@@ -705,7 +712,19 @@ B2B_PRE_PROPOSAL_FOLLOWUP_HOURS=3
 B2B_POST_PROPOSAL_FOLLOWUP_HOURS=12
 ```
 
-Inbound customer activity dan human handling dapat membatalkan/reset follow-up yang relevan.
+Free-form automated follow-up tetap menggunakan safety window terhadap inbound customer terbaru agar tidak melewati WhatsApp customer-service window yang dikontrol sistem. Human handling juga dapat membatalkan pending follow-up.
+
+## B2C Last Call campaign
+
+Last Call memakai queue/table terpisah dari normal follow-up. Pada H-5, H-3, H-1, dan hari terakhir pendaftaran, inbound B2C Bootcamp dapat menjadwalkan media Last Call sekitar 12 jam setelah inbound terbaru. Inbound baru sebelum due time mereset timer. Payment claim membatalkan Last Call.
+
+```env
+B2C_LAST_CALL_ENABLED=true
+B2C_LAST_CALL_DELAY_HOURS=12
+BOOTCAMP_REGISTRATION_DEADLINE=2026-11-01
+```
+
+Untuk deadline Batch 12 pada 1 November 2026, tanggal campaign adalah H-5 27 Oktober, H-3 29 Oktober, H-1 31 Oktober, dan H 1 November. Last Call tidak mengubah conversation stage.
 
 ---
 
@@ -733,7 +752,9 @@ in_progress
 resolved
 ```
 
-Human Reply hanya tersedia ketika lead memiliki notification dengan status:
+Human Reply tersedia ketika lead memiliki notification aktif. Dashboard juga menyediakan aktivasi manual Human Handling yang membuat `MANUAL_HUMAN_HANDLING`, sehingga admin dapat membuka Human Reply tanpa menunggu event otomatis.
+
+Human Reply aktif ketika notification memiliki status:
 
 ```text
 unread
@@ -799,6 +820,8 @@ Routes utama:
 /b2b    B2B leads
 /lead/<sender>  Lead Detail
 ```
+
+Dashboard dilindungi login berbasis session menggunakan `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD`, dan `DASHBOARD_SECRET_KEY`. Route login/logout melindungi halaman dashboard dan Lead Detail.
 
 Current capabilities:
 
@@ -908,6 +931,7 @@ wa-ai-admin/
 │
 ├── knowledge/
 │   ├── general.md
+│   ├── website_snapshot.md
 │   ├── corporate_training.md
 │   └── intensive_bootcamp.md
 │
@@ -917,9 +941,17 @@ wa-ai-admin/
 │   └── neutral.md
 │
 ├── B2C Document/
-│   ├── Infografis AI Intensitve Bootcamp.jpg
-│   ├── Prosedur Pendaftaran & Pembayaran AI Intensitve Bootcamp.pdf
-│   └── QRIS Transfer Pembayaran Indonesia AI.jpg
+│   ├── AI Intensive Bootcamp.pdf
+│   ├── Dashboard Belajar.png
+│   ├── Infografis AI Intensive Bootcamp (Red).jpg
+│   ├── Infografis AI Intensive Bootcamp (White).jpg
+│   ├── Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf
+│   ├── QRIS Transfer Pembayaran Indonesia AI.jpg
+│   ├── Tanggal Jatuh Tempo.jpg
+│   ├── Last Call H-5.jpg
+│   ├── Last Call H-3.jpg
+│   ├── Last Call H-1.jpg
+│   └── Last Call H.jpg
 │
 ├── B2B Document/
 │   └── Proposal Penawaran AI Corporate Training.pdf
@@ -1015,16 +1047,18 @@ Setelah perubahan besar, minimal test jalur berikut.
 2. Verify infographic is sent from B2C Document/
 3. Select ML/CV/NLP
 4. Ask curriculum/material/dashboard questions
-5. State registration intent
-6. Confirm class + quantity
-7. Verify procedure PDF + QRIS are both sent
-8. Ask "kirim ulang QRIS"
-9. Ask generic "kirim ulang" after registration docs
-10. Claim payment, including typo-heavy wording
-11. Verify STATE EXTRACTOR returns payment_claimed=true
-12. Verify REGISTRATION_PAYMENT_CONFIRMATION exists
-13. Verify Human Reply becomes available
-14. Send human text/file reply
+5. Ask naturally about installment/payment due dates and verify `payment_due_date` media is selected
+6. State registration intent
+7. Confirm class + quantity
+8. Verify procedure PDF + QRIS are both sent
+9. Ask "kirim ulang QRIS"
+10. Ask generic "kirim ulang" after registration docs
+11. Claim payment, including typo-heavy wording
+12. Verify STATE EXTRACTOR returns payment_claimed=true
+13. Verify REGISTRATION_PAYMENT_CONFIRMATION exists
+14. Verify Human Reply becomes available
+15. Test manual Human Handling activation
+16. Send human text/file reply
 ```
 
 ## B2B
@@ -1138,7 +1172,7 @@ customer private data/documents
 Before production deployment, review at least:
 
 ```text
-Dashboard authentication + authorization
+Dashboard authentication/authorization and credential hardening
 HTTPS/network exposure
 Meta durable/System User token management
 secret storage and rotation
@@ -1205,7 +1239,11 @@ Always inspect `git status` before committing to make sure `.env`, live database
 | Milestone 6C | Configurable model experiment / Luna phase | Completed experiment |
 | Current | GPT-5.6 + semantic state extractor every inbound turn | ✅ Active |
 | Current | Local regex `state_parser.py` removed | ✅ |
-| Current | Correct B2C/B2B document mapping + media resend | ✅ |
+| Current | Correct B2C/B2B document mapping + semantic media triggers/resend | ✅ |
+| Current | Website snapshot + detailed core Bootcamp/Corporate knowledge | ✅ |
+| Current | B2C two-stage pre-registration follow-up | ✅ |
+| Current | B2C Last Call campaign scheduler | ✅ |
+| Current | Dashboard login/logout + manual Human Handling | ✅ |
 | Current | Payment notification → Human Reply handoff | ✅ |
 | Production hardening | Auth, durable deployment, monitoring, retries, etc. | Planned |
 
@@ -1222,7 +1260,8 @@ SQLite
 OpenAI API
 GPT-5.6 (current default)
 Meta WhatsApp Business Platform / Cloud API
-ngrok
+ngrok (development)
+Cloudflare Tunnel (planned production endpoint)
 HTML / CSS / Jinja
 Markdown business knowledge/style files
 ```

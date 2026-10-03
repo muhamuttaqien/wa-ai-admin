@@ -36,12 +36,31 @@ def lead_text(lead):
     )
 
 
+def _remove_customer_colons(text: str) -> str:
+    """Remove colon punctuation from customer-facing prose without breaking URLs."""
+    urls = []
+
+    def _protect_url(match):
+        urls.append(match.group(0))
+        return f"__URL_{len(urls) - 1}__"
+
+    protected = re.sub(r"https?://\S+", _protect_url, text)
+    # Time expressions read more naturally with a dot in Indonesian WhatsApp copy.
+    protected = re.sub(r"(?<=\d):(?=\d)", ".", protected)
+    protected = protected.replace(":", ",")
+
+    for idx, url in enumerate(urls):
+        protected = protected.replace(f"__URL_{idx}__", url)
+    return protected
+
+
 def _clean_bubble(text: str) -> str:
     text = text.strip()
     text = text.replace("—", ",")
     # Remove WhatsApp/Markdown bold markers while keeping the words.
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text, flags=re.DOTALL)
     text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", text)
+    text = _remove_customer_colons(text)
     return text.strip()
 
 
@@ -108,10 +127,19 @@ Aturan fakta:
 - Jika customer bertanya cicilan, boleh jelaskan informasi cicilan yang memang ada di BUSINESS KNOWLEDGE, tetapi jangan mengatakan customer perlu/mesti menghubungi tim admission untuk cicilannya.
 - Jangan menyebut classifier, confidence, kategori internal, database,
   lead profile, question state, prompt, knowledge file, LLM, atau mekanisme internal.
+- Berbicaralah sebagai Admin Indonesia AI yang mengetahui informasi program secara langsung.
+  Sampaikan fakta bisnis secara natural, bukan seperti sedang membaca atau mengutip sumber.
+- Jangan menggunakan ungkapan seperti "berdasarkan yang tercantum", "seperti yang tercantum",
+  "tercantum", "berdasarkan informasi yang tersedia", "berdasarkan website", "di website kami",
+  "menurut website", atau ungkapan lain yang memberi kesan jawaban sedang menyalin sumber,
+  kecuali pelanggan secara eksplisit menanyakan sumber informasinya.
 
 Aturan gaya WhatsApp:
 - Gunakan Bahasa Indonesia yang natural, ringkas, dan sesuai STYLE PROFILE.
 - Jangan menggunakan tanda em dash.
+- Jangan menggunakan tanda titik dua (:) dalam teks customer-facing. Susun ulang kalimat
+  dengan koma, titik, tanda kurung, atau kalimat terpisah. URL seperti https:// tetap boleh
+  menggunakan titik dua karena merupakan bagian teknis dari URL.
 - Jangan menggunakan bold text atau markdown bold.
 - Jangan membuat satu pesan panjang jika lebih natural dipecah.
 - Pilih 1, 2, atau maksimal 3 bubble WhatsApp berdasarkan kebutuhan dan ritme percakapan.

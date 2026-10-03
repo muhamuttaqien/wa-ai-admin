@@ -22,7 +22,7 @@ from acknowledgement import is_acknowledgement_only
 from notification_store import create_notification
 from followup_scheduler import (
     cancel_followup, cancel_last_call, due_followups, due_last_call_followups,
-    mark_followup_sent, mark_last_call_sent, schedule_for_b2c_state,
+    mark_followup_sent, mark_last_call_sent, schedule_b2c_second_pre_followup, schedule_for_b2c_state,
     schedule_for_b2b_state, schedule_last_call_for_b2c,
 )
 
@@ -48,7 +48,7 @@ MEDIA = {
         ROOT / "B2C Document" / "Infografis AI Intensive Bootcamp (White).jpg",
         "image",
     ),
-    "learning_dashboard": (ROOT / "B2C Document" / "Dashboard Belajar.jpg", "image"),
+    "learning_dashboard": (ROOT / "B2C Document" / "Dashboard Belajar.png", "image"),
     "bootcamp_registration_doc": (
         ROOT / "B2C Document" / "Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf",
         "document",
@@ -155,6 +155,7 @@ def process_due_followups():
         try:
             texts = {
                 "b2c_pre_registration": "Bagaimana kak, apa ada yang ingin ditanyakan lagi terkait program bootcampnya?",
+                "b2c_pre_registration_second": "Kak, izin follow up sekali lagi ya 😊 Kalau masih ada yang ingin ditanyakan terkait kelas, jadwal, kurikulum, atau pendaftarannya, boleh langsung kabari kami di sini.",
                 "b2c_post_registration": "Bagaimana kak, apakah ada kesulitan di pendaftarannya?",
                 "b2b_pre_proposal": "Haloo Bapak/Ibu, izin follow up kembali yah. Apa ada yang ingin ditanyakan lebih lanjut terkait program AI Corporate Trainingnya?",
                 "b2b_post_proposal": "Haloo Bapak/Ibu, izin follow up kembali terkait proposal yang sebelumnya sudah kami kirimkan. Kalau dirasa perlu untuk diskusi lebih lanjut, tim kami bisa untuk Quick Call ataupun Quick Meeting dengan tim dari perusahaan Bapak/Ibu.",
@@ -166,6 +167,11 @@ def process_due_followups():
             send_text_message(sender, text)
             add_message(sender, "assistant", text)
             mark_followup_sent(sender)
+            if kind == "b2c_pre_registration":
+                # Reminder #2 is +9h from reminder #1, i.e. about +12h from
+                # the latest customer inbound that created the original 3h timer.
+                schedule_b2c_second_pre_followup(sender)
+                print(f"FOLLOW-UP #2 SCHEDULED : {sender} [+9h]")
             print(f"FOLLOW-UP SENT : {sender} [{kind}]")
         except Exception as exc:
             print("Follow-up send error:", exc)

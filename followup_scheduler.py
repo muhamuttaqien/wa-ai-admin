@@ -8,6 +8,7 @@ load_dotenv()
 
 B2C_ENABLED = os.getenv("B2C_FOLLOWUP_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
 B2C_PRE_HOURS = float(os.getenv("B2C_PRE_REGISTRATION_FOLLOWUP_HOURS", "3"))
+B2C_PRE_SECOND_HOURS = float(os.getenv("B2C_PRE_REGISTRATION_SECOND_FOLLOWUP_HOURS", "9"))
 B2C_POST_HOURS = float(os.getenv("B2C_POST_REGISTRATION_FOLLOWUP_HOURS", "12"))
 
 B2B_ENABLED = os.getenv("B2B_FOLLOWUP_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
@@ -34,6 +35,7 @@ LAST_CALL_BY_DAYS = {5: LAST_CALL_H5, 3: LAST_CALL_H3, 1: LAST_CALL_H1, 0: LAST_
 
 for name, value in {
     "B2C_PRE_REGISTRATION_FOLLOWUP_HOURS": B2C_PRE_HOURS,
+    "B2C_PRE_REGISTRATION_SECOND_FOLLOWUP_HOURS": B2C_PRE_SECOND_HOURS,
     "B2C_POST_REGISTRATION_FOLLOWUP_HOURS": B2C_POST_HOURS,
     "B2B_PRE_PROPOSAL_FOLLOWUP_HOURS": B2B_PRE_HOURS,
     "B2B_POST_PROPOSAL_FOLLOWUP_HOURS": B2B_POST_HOURS,
@@ -43,10 +45,11 @@ for name, value in {
         raise ValueError(f"{name} must be >= 0")
 
 B2C_PRE = "b2c_pre_registration"
+B2C_PRE_SECOND = "b2c_pre_registration_second"
 B2C_POST = "b2c_post_registration"
 B2B_PRE = "b2b_pre_proposal"
 B2B_POST = "b2b_post_proposal"
-KINDS = {B2C_PRE, B2C_POST, B2B_PRE, B2B_POST}
+KINDS = {B2C_PRE, B2C_PRE_SECOND, B2C_POST, B2B_PRE, B2B_POST}
 
 
 def _now():
@@ -122,6 +125,7 @@ def schedule_followup(sender: str, kind: str):
 
     hours = {
         B2C_PRE: B2C_PRE_HOURS,
+        B2C_PRE_SECOND: B2C_PRE_SECOND_HOURS,
         B2C_POST: B2C_POST_HOURS,
         B2B_PRE: B2B_PRE_HOURS,
         B2B_POST: B2B_POST_HOURS,
@@ -141,6 +145,15 @@ def schedule_followup(sender: str, kind: str):
                     sent_at=NULL
             """, (sender, kind, due.isoformat(), now.isoformat()))
     return due.isoformat()
+
+
+def schedule_b2c_second_pre_followup(sender: str):
+    """Schedule the second pre-registration reminder 9h after reminder #1.
+
+    The WhatsApp safety check still uses the latest inbound customer message,
+    not this bot-generated reminder. No third reminder is scheduled.
+    """
+    return schedule_followup(sender, B2C_PRE_SECOND)
 
 
 def schedule_for_b2c_state(sender: str, lead: dict, flow: dict):
