@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from conversation import _connect, _lock
 
 load_dotenv()
@@ -18,11 +19,25 @@ B2B_POST_HOURS = float(os.getenv("B2B_POST_PROPOSAL_FOLLOWUP_HOURS", "12"))
 # 23.5 hours so scheduler/polling/network delays cannot push a send over 24h.
 WHATSAPP_FREEFORM_MAX_AGE_HOURS = 23.5
 
+# B2C Last Call campaign. This uses a separate queue so it never replaces the
+# existing 3h/12h inactivity follow-up for the same sender.
+LAST_CALL_ENABLED = os.getenv("B2C_LAST_CALL_ENABLED", "true").strip().lower() in {"1","true","yes","on"}
+LAST_CALL_DELAY_HOURS = float(os.getenv("B2C_LAST_CALL_DELAY_HOURS", "12"))
+BOOTCAMP_REGISTRATION_DEADLINE = os.getenv("BOOTCAMP_REGISTRATION_DEADLINE", "2026-11-01").strip()
+JAKARTA = ZoneInfo("Asia/Jakarta")
+
+LAST_CALL_H5 = "b2c_last_call_h5"
+LAST_CALL_H3 = "b2c_last_call_h3"
+LAST_CALL_H1 = "b2c_last_call_h1"
+LAST_CALL_TODAY = "b2c_last_call_today"
+LAST_CALL_BY_DAYS = {5: LAST_CALL_H5, 3: LAST_CALL_H3, 1: LAST_CALL_H1, 0: LAST_CALL_TODAY}
+
 for name, value in {
     "B2C_PRE_REGISTRATION_FOLLOWUP_HOURS": B2C_PRE_HOURS,
     "B2C_POST_REGISTRATION_FOLLOWUP_HOURS": B2C_POST_HOURS,
     "B2B_PRE_PROPOSAL_FOLLOWUP_HOURS": B2B_PRE_HOURS,
     "B2B_POST_PROPOSAL_FOLLOWUP_HOURS": B2B_POST_HOURS,
+    "B2C_LAST_CALL_DELAY_HOURS": LAST_CALL_DELAY_HOURS,
 }.items():
     if value < 0:
         raise ValueError(f"{name} must be >= 0")
@@ -58,6 +73,16 @@ def init_followup_db():
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_followups_due ON followups(due_at)")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS b2c_last_call_followups (
+                    sender TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    due_at TEXT NOT NULL,
+                    scheduled_at TEXT NOT NULL,
+                    sent_at TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_b2c_last_call_due ON b2c_last_call_followups(due_at)")
 
             # One-time compatibility migration from Milestone 4E.3.
             old_exists = conn.execute(
@@ -131,6 +156,115 @@ def schedule_for_b2c_state(sender: str, lead: dict, flow: dict):
         return schedule_followup(sender, B2C_PRE)
     cancel_followup(sender)
     return None
+
+
+def cancel_last_call(sender: str):
+    with _lock:
+        with _connect() as conn:
+            conn.execute("DELETE FROM b2c_last_call_followups WHERE sender=?", (sender,))
+
+
+def _registration_deadline():
+    try:
+        return datetime.strptime(BOOTCAMP_REGISTRATION_DEADLINE, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("BOOTCAMP_REGISTRATION_DEADLINE must use YYYY-MM-DD format") from exc
+
+
+def schedule_last_call_for_b2c(sender: str, lead: dict, flow: dict):
+    """Schedule Last Call +12h when the current WIB date is H-5/H-3/H-1/H.
+
+    This queue is independent from normal follow-ups and does not change the
+    conversation stage. A later inbound message cancels this row at webhook time
+    and, after processing, creates a fresh timer only if its date is eligible.
+    """
+    if not LAST_CALL_ENABLED:
+        cancel_last_call(sender)
+        return None
+    if lead.get("product_interest") != "AI Intensive Bootcamp":
+        cancel_last_call(sender)
+        return None
+    if flow.get("payment_claimed"):
+        cancel_last_call(sender)
+        return None
+
+    now = _now()
+    today_wib = now.astimezone(JAKARTA).date()
+    days_left = (_registration_deadline() - today_wib).days
+    kind = LAST_CALL_BY_DAYS.get(days_left)
+    if not kind:
+        cancel_last_call(sender)
+        return None
+
+    due = now + timedelta(hours=LAST_CALL_DELAY_HOURS)
+    with _lock:
+        with _connect() as conn:
+            conn.execute("""
+                INSERT INTO b2c_last_call_followups(sender, kind, due_at, scheduled_at, sent_at)
+                VALUES (?, ?, ?, ?, NULL)
+                ON CONFLICT(sender) DO UPDATE SET
+                    kind=excluded.kind, due_at=excluded.due_at,
+                    scheduled_at=excluded.scheduled_at, sent_at=NULL
+            """, (sender, kind, due.isoformat(), now.isoformat()))
+    print(f"LAST CALL SCHEDULED : {sender} [{kind}] due={due.isoformat()}")
+    return due.isoformat()
+
+
+def due_last_call_followups(limit: int = 20):
+    """Return only eligible Last Calls safely inside the free-form window."""
+    if not LAST_CALL_ENABLED:
+        return []
+
+    now = _now()
+    safe = []
+    with _lock:
+        with _connect() as conn:
+            rows = conn.execute("""
+                SELECT lc.sender, lc.kind, lc.due_at,
+                       (SELECT cm.created_at FROM conversation_messages cm
+                        WHERE cm.sender=lc.sender AND cm.role='user'
+                        ORDER BY cm.id DESC LIMIT 1) AS last_user_at,
+                       COALESCE(pfs.payment_claimed, 0) AS payment_claimed,
+                       l.product_interest AS product_interest
+                FROM b2c_last_call_followups lc
+                LEFT JOIN program_flow_state pfs ON pfs.sender=lc.sender
+                LEFT JOIN leads l ON l.sender=lc.sender
+                WHERE lc.sent_at IS NULL AND lc.due_at <= ?
+                ORDER BY lc.due_at ASC LIMIT ?
+            """, (now.isoformat(), limit)).fetchall()
+
+            for row in rows:
+                reason = None
+                if row["product_interest"] != "AI Intensive Bootcamp":
+                    reason = "lead is no longer Bootcamp"
+                elif bool(row["payment_claimed"]):
+                    reason = "payment already claimed"
+                elif not row["last_user_at"]:
+                    reason = "no inbound customer timestamp"
+                else:
+                    age_hours = (now - _parse_utc(row["last_user_at"])).total_seconds() / 3600.0
+                    if age_hours >= WHATSAPP_FREEFORM_MAX_AGE_HOURS:
+                        reason = f"last customer message {age_hours:.2f}h ago"
+
+                if reason:
+                    conn.execute("DELETE FROM b2c_last_call_followups WHERE sender=?", (row["sender"],))
+                    print(f"LAST CALL BLOCKED : {row['sender']} [{row['kind']}] {reason}")
+                    continue
+                safe.append({"sender": row["sender"], "kind": row["kind"], "due_at": row["due_at"]})
+    return safe
+
+
+def mark_last_call_sent(sender: str):
+    with _lock:
+        with _connect() as conn:
+            conn.execute("UPDATE b2c_last_call_followups SET sent_at=? WHERE sender=?", (_now().isoformat(), sender))
+
+
+def inspect_last_call_followups():
+    with _lock:
+        with _connect() as conn:
+            rows = conn.execute("SELECT sender, kind, due_at, scheduled_at, sent_at FROM b2c_last_call_followups ORDER BY due_at").fetchall()
+    return [dict(r) for r in rows]
 
 
 def schedule_for_b2b_state(sender: str, lead: dict, flow: dict):

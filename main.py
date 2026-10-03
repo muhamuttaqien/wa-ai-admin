@@ -20,7 +20,11 @@ from business_links import DASHBOARD_DEMO_LINK, curriculum_url, track_page_url
 from whatsapp import send_text_message, send_media_message
 from acknowledgement import is_acknowledgement_only
 from notification_store import create_notification
-from followup_scheduler import cancel_followup, due_followups, mark_followup_sent, schedule_for_b2c_state, schedule_for_b2b_state
+from followup_scheduler import (
+    cancel_followup, cancel_last_call, due_followups, due_last_call_followups,
+    mark_followup_sent, mark_last_call_sent, schedule_for_b2c_state,
+    schedule_for_b2b_state, schedule_last_call_for_b2c,
+)
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
 BUFFER_POLL_SECONDS = float(os.getenv("BUFFER_POLL_SECONDS", "1.0"))
@@ -44,7 +48,7 @@ MEDIA = {
         ROOT / "B2C Document" / "Infografis AI Intensive Bootcamp (White).jpg",
         "image",
     ),
-    "learning_dashboard": (ROOT / "B2C Document" / "Dashboard Belajar.png", "image"),
+    "learning_dashboard": (ROOT / "B2C Document" / "Dashboard Belajar.jpg", "image"),
     "bootcamp_registration_doc": (
         ROOT / "B2C Document" / "Prosedur Pendaftaran & Pembayaran AI Intensive Bootcamp.pdf",
         "document",
@@ -56,7 +60,7 @@ MEDIA = {
     "payment_due_date": (ROOT / "B2C Document" / "Tanggal Jatuh Tempo.jpg", "image"),
 
     # Registered for a future campaign scheduler; never auto-selected from normal chat.
-    "last_call_h5": (ROOT / "B2C Document" / "Last Call H-5.png", "image"),
+    "last_call_h5": (ROOT / "B2C Document" / "Last Call H-5.jpg", "image"),
     "last_call_h3": (ROOT / "B2C Document" / "Last Call H-3.jpg", "image"),
     "last_call_h1": (ROOT / "B2C Document" / "Last Call H-1.jpg", "image"),
     "last_call_today": (ROOT / "B2C Document" / "Last Call H.jpg", "image"),
@@ -167,6 +171,34 @@ def process_due_followups():
             print("Follow-up send error:", exc)
 
 
+LAST_CALL_MEDIA = {
+    "b2c_last_call_h5": "last_call_h5",
+    "b2c_last_call_h3": "last_call_h3",
+    "b2c_last_call_h1": "last_call_h1",
+    "b2c_last_call_today": "last_call_today",
+}
+
+
+def process_due_last_calls():
+    for item in due_last_call_followups():
+        sender = item["sender"]
+        kind = item["kind"]
+        media_key = LAST_CALL_MEDIA.get(kind)
+        try:
+            if not media_key:
+                mark_last_call_sent(sender)
+                continue
+            path, media_type = MEDIA[media_key]
+            if not path.exists():
+                raise RuntimeError(f"Media file tidak ditemukan: {path}")
+            send_media_message(sender, str(path), media_type)
+            add_message(sender, "assistant", f"[Media: {media_key}]")
+            mark_last_call_sent(sender)
+            print(f"LAST CALL SENT : {sender} [{kind}]")
+        except Exception as exc:
+            print("Last Call send error:", exc)
+
+
 def process_sender_batch(sender):
     if not is_batch_due(sender): return
     buffered=get_buffered_messages(sender)
@@ -185,6 +217,7 @@ def process_sender_batch(sender):
         flow = get_flow(sender)
         if lead.get("product_interest") == "AI Intensive Bootcamp":
             schedule_for_b2c_state(sender, lead, flow)
+            schedule_last_call_for_b2c(sender, lead, flow)
         elif lead.get("product_interest") == "AI Corporate Training":
             schedule_for_b2b_state(sender, lead, flow)
         complete_batch(sender, ids)
@@ -315,6 +348,7 @@ def process_sender_batch(sender):
         complete_batch(sender,ids)
         if classification["category"] == "AI Intensive Bootcamp":
             schedule_for_b2c_state(sender, lead, flow)
+            schedule_last_call_for_b2c(sender, lead, flow)
         elif classification["category"] == "AI Corporate Training":
             schedule_for_b2b_state(sender, lead, flow)
         print(f"Memory : {count_messages(sender)} total messages")
@@ -329,6 +363,7 @@ def buffer_worker():
         try:
             for sender in due_senders(): process_sender_batch(sender)
             process_due_followups()
+            process_due_last_calls()
         except Exception as exc: print("Buffer worker error:",exc)
         _worker_stop.wait(BUFFER_POLL_SECONDS)
 
@@ -364,5 +399,6 @@ async def receive_webhook(request:Request):
         result=enqueue_message(sender,mid,text)
         if not result["duplicate"]:
             cancel_followup(sender)
+            cancel_last_call(sender)
             queued+=1
     return {"status":"ok","queued":queued}
